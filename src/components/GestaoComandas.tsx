@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { db } from '../lib/db';
+import { controlaEstoqueNaVenda } from '../lib/estoque';
 import { apurarPagamentos, type MetodoPagamento, type Pagamento } from '../lib/money';
 
 type Produto = { id: string; nome: string; preco_venda: number; preco_custo: number; tipo: string; is_receita?: boolean; quantidade_estoque: number };
@@ -78,7 +79,7 @@ export default function GestaoComandas({ atendente }: GestaoComandasProps) {
         const fichasIds = new Set(fichas?.map(f => f.produto_venda_id) || []);
 
         if (prodData) {
-            setProdutos(prodData.map(p => ({ ...p, is_receita: fichasIds.has(p.id) && p.modo_estoque !== 'producao_lote' })));
+            setProdutos(prodData.map(p => ({ ...p, is_receita: !controlaEstoqueNaVenda(p.modo_estoque, fichasIds.has(p.id)) })));
         }
 
         if (!silencioso) setCarregando(false);

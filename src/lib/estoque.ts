@@ -68,3 +68,16 @@ export function converterQuantidadeParaEstoque(quantidade: number, unidadeInform
   }
   return (valor * fatorParaBase[unidadeInformada]) / fatorParaBase[unidadeEstoque];
 }
+
+export type ModoEstoque = 'revenda' | 'sem_controle' | 'producao_sob_demanda' | 'producao_lote';
+
+/**
+ * Indica se a venda do produto é limitada pelo estoque do próprio produto.
+ * Não controla: itens "sem controle" (preparados na hora) e itens com ficha técnica
+ * produzidos sob demanda (a baixa é nos insumos). Produção em lote e revenda controlam.
+ */
+export function controlaEstoqueNaVenda(modo: string | null | undefined, temFichaTecnica: boolean): boolean {
+  if (modo === 'sem_controle') return false;
+  if (temFichaTecnica && modo !== 'producao_lote') return false;
+  return true;
+}

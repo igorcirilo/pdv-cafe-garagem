@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { db } from '../lib/db';
+import { controlaEstoqueNaVenda } from '../lib/estoque';
 import { apurarPagamentos, type MetodoPagamento, type Pagamento } from '../lib/money';
 import { useMediaQuery, QUERY_TELA_LARGA } from '../lib/useMediaQuery';
 
@@ -86,7 +87,7 @@ export default function PDVModulo({ atendente }: PDVModuloProps) {
       setProdutos(produtosData.map(p => ({
         id: p.id, nome: p.nome, categoria: p.categoria ?? null, preco_venda: p.preco_venda, preco_custo: p.preco_custo || 0,
         quantidade_estoque: p.quantidade_estoque || 0,
-        is_receita: fichasIds.has(p.id) && p.modo_estoque !== 'producao_lote'
+        is_receita: !controlaEstoqueNaVenda(p.modo_estoque, fichasIds.has(p.id))
       })));
     }
   };

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { db } from '../lib/db';
+import { controlaEstoqueNaVenda } from '../lib/estoque';
 import { valoresIguais } from '../lib/money';
 
 type ItemVenda = { produto_id: string; quantidade: number; preco_unitario: number; custo_unitario?: number | null; produtos: { nome: string } };
@@ -129,7 +130,7 @@ export default function DashboardModulo() {
 
     if (prodData) {
       setProdutosDisponiveis(prodData.map(p => ({
-        id: p.id, nome: p.nome, preco_venda: p.preco_venda, preco_custo: p.preco_custo || 0, quantidade_estoque: p.quantidade_estoque || 0, is_receita: fichasIds.has(p.id)
+        id: p.id, nome: p.nome, preco_venda: p.preco_venda, preco_custo: p.preco_custo || 0, quantidade_estoque: p.quantidade_estoque || 0, is_receita: !controlaEstoqueNaVenda(p.modo_estoque, fichasIds.has(p.id))
       })));
     }
 
@@ -139,7 +140,7 @@ export default function DashboardModulo() {
       preco_unitario: item.preco_unitario,
       custo_unitario: item.custo_unitario || produtosDisponiveis.find(produto => produto.id === item.produto_id)?.preco_custo || 0,
       quantidade: item.quantidade,
-      is_receita: fichasIds.has(item.produto_id)
+      is_receita: !controlaEstoqueNaVenda(prodData?.find(p => p.id === item.produto_id)?.modo_estoque, fichasIds.has(item.produto_id))
     }));
     setCarrinhoEdicao(itensMapeados);
   };

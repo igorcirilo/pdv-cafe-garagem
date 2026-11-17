@@ -55,7 +55,7 @@ describe('módulos operacionais', () => {
 
   it('carrega a área de compras sem dados e preserva os formulários operacionais', async () => {
     render(<EntradasCompras atendente="Teste" />);
-    await waitFor(() => expect(screen.getByText(/Gestão de Compras/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Insumos \(matéria-prima\)/i)).toBeInTheDocument());
     expect(screen.getByText(/Registar Entrada/i)).toBeInTheDocument();
     expect(screen.getByText(/Inventário de Base/i)).toBeInTheDocument();
   });
@@ -98,7 +98,7 @@ describe('módulos operacionais', () => {
 
   it('carrega o cadastro de produtos de revenda', async () => {
     render(<CadastroRevenda atendente="Teste" />);
-    await waitFor(() => expect(screen.getByText(/Gestão de Estoque \(Produtos Prontos\)/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Produtos à venda e estoque/i)).toBeInTheDocument());
     expect(screen.getByText('Novo Produto')).toBeInTheDocument();
     expect(screen.getByText(/Catálogo e Estoque/i)).toBeInTheDocument();
   });

@@ -5,8 +5,8 @@ import { calcularCompraEmbalada } from '../lib/estoque';
 type Produto = {
   id: string; nome: string; preco_custo: number; preco_venda: number;
   quantidade_estoque: number; estoque_minimo: number;
-  tamanho: number | null; unidade_medida: string;
-  modo_estoque: 'revenda' | 'producao_sob_demanda' | 'producao_lote';
+  tamanho: number | null; unidade_medida: string; categoria: string | null;
+  modo_estoque: 'revenda' | 'sem_controle' | 'producao_sob_demanda' | 'producao_lote';
 };
 
 type Insumo = {
@@ -63,6 +63,8 @@ export default function CadastroRevenda({ atendente }: CadastroRevendaProps) {
   const [estoqueMinimo, setEstoqueMinimo] = useState<number | ''>(5);
   const [tamanho, setTamanho] = useState<number | ''>('');
   const [unidadeMedida, setUnidadeMedida] = useState('un');
+  const [categoriaNova, setCategoriaNova] = useState('');
+  const [controlarEstoque, setControlarEstoque] = useState(true);
 
   // Feedbacks e Modais
   const [feedback, setFeedback] = useState<{ msg: string, tipo: 'sucesso' | 'erro' | 'aviso' | null }>({ msg: '', tipo: null });
@@ -104,15 +106,19 @@ export default function CadastroRevenda({ atendente }: CadastroRevendaProps) {
   const [editEstoqueMinimo, setEditEstoqueMinimo] = useState<number | ''>('');
   const [editTamanho, setEditTamanho] = useState<number | ''>('');
   const [editUnidadeMedida, setEditUnidadeMedida] = useState('un');
+  const [editCategoria, setEditCategoria] = useState('');
+  const [editControlarEstoque, setEditControlarEstoque] = useState(true);
 
   const [termoBusca, setTermoBusca] = useState('');
 
   // FILTROS MESCLADOS (PRODUTOS + INSUMOS)
   const produtosFiltrados = produtos.filter(produto => produto.nome.toLowerCase().includes(termoBusca.toLowerCase()));
 
+  const categoriasExistentes = useMemo(() => [...new Set(produtos.map(p => p.categoria).filter((c): c is string => Boolean(c)))].sort(), [produtos]);
+
   const mixParaLote = useMemo(() => {
     const list = [
-        ...produtos.filter(p => p.modo_estoque !== 'producao_lote').map(p => ({ ...p, tipoItem: 'produto' as const })),
+        ...produtos.filter(p => p.modo_estoque === 'revenda').map(p => ({ ...p, tipoItem: 'produto' as const })),
         ...insumos.map(i => ({ ...i, tipoItem: 'insumo' as const, preco_venda: 0 }))
     ];
     return list.filter(item => item.nome.toLowerCase().includes(termoBuscaLote.toLowerCase()));
@@ -187,13 +193,13 @@ export default function CadastroRevenda({ atendente }: CadastroRevendaProps) {
       const { data: produtoCriado, error: erroProd } = await db.from('produtos').insert([{
         nome, tipo: 'venda', preco_custo: Number(precoCusto) || 0, preco_venda: Number(precoVenda),
         unidade_medida: unidadeMedida, tamanho: tamanho !== '' ? Number(tamanho) : null,
-        quantidade_estoque: Number(quantidadeEstoque) || 0, estoque_minimo: estoqueMinimoValido(estoqueMinimo),
-        modo_estoque: 'revenda', ativo: true
+        quantidade_estoque: controlarEstoque ? Number(quantidadeEstoque) || 0 : 0, estoque_minimo: estoqueMinimoValido(estoqueMinimo),
+        modo_estoque: controlarEstoque ? 'revenda' : 'sem_controle', categoria: categoriaNova.trim() || null, ativo: true
       }]).select().single();
 
       if (erroProd) throw erroProd;
 
-      if (Number(quantidadeEstoque) > 0) {
+      if (controlarEstoque && Number(quantidadeEstoque) > 0) {
         const { error: erroMov } = await db.from('movimentacoes_estoque').insert([{
           produto_id: produtoCriado.id, quantidade: Number(quantidadeEstoque),
           tipo_movimento: 'Entrada - Estoque Inicial', motivo: 'Cadastro de Produto Novo', atendente
@@ -202,7 +208,7 @@ export default function CadastroRevenda({ atendente }: CadastroRevendaProps) {
       }
 
       mostrarMensagem('Produto cadastrado com sucesso!', 'sucesso');
-      setNome(''); setPrecoCusto(''); setPrecoVenda(''); setQuantidadeEstoque(''); setMargem('');
+      setNome(''); setPrecoCusto(''); setPrecoVenda(''); setQuantidadeEstoque(''); setMargem(''); setCategoriaNova(''); setControlarEstoque(true);
       setEstoqueMinimo(5); setTamanho(''); setUnidadeMedida('un');
       carregarDados();
     } catch (error) { console.error(error); mostrarMensagem('Erro ao cadastrar produto.', 'erro'); }
@@ -225,7 +231,9 @@ export default function CadastroRevenda({ atendente }: CadastroRevendaProps) {
     setEditPrecoVenda(produto.preco_venda);
     setEditTamanho(produto.tamanho || '');
     setEditUnidadeMedida(produto.unidade_medida);
-    setEditEstoqueMinimo(produto.estoque_minimo || 5);
+    setEditEstoqueMinimo(produto.estoque_minimo ?? 5);
+    setEditCategoria(produto.categoria || '');
+    setEditControlarEstoque(produto.modo_estoque !== 'sem_controle');
 
     const m = produto.preco_custo > 0 ? ((produto.preco_venda - produto.preco_custo) / produto.preco_custo) * 100 : 0;
     setEditMargem(m > 0 ? Number(m.toFixed(1)) : '');
@@ -452,7 +460,10 @@ export default function CadastroRevenda({ atendente }: CadastroRevendaProps) {
     try {
       const { error } = await db.from('produtos').update({
         nome: editNome, preco_custo: Number(editPrecoCusto) || 0, preco_venda: Number(editPrecoVenda),
-        tamanho: editTamanho !== '' ? Number(editTamanho) : null, unidade_medida: editUnidadeMedida, estoque_minimo: estoqueMinimoValido(editEstoqueMinimo)
+        tamanho: editTamanho !== '' ? Number(editTamanho) : null, unidade_medida: editUnidadeMedida, estoque_minimo: estoqueMinimoValido(editEstoqueMinimo),
+        categoria: editCategoria.trim() || null,
+        // Só alterna entre revenda e sem controle; produtos de produção mantêm o modo definido na ficha técnica.
+        ...(['revenda', 'sem_controle'].includes(produtoParaEditar.modo_estoque) ? { modo_estoque: editControlarEstoque ? 'revenda' : 'sem_controle' } : {}),
       }).eq('id', produtoParaEditar.id);
       if (error) throw error;
       mostrarMensagem('Produto atualizado!', 'sucesso'); setProdutoParaEditar(null); carregarDados();
@@ -830,9 +841,23 @@ export default function CadastroRevenda({ atendente }: CadastroRevendaProps) {
               </div>
 
               <div>
+                <label className="block text-sm font-bold mb-1 text-gray-700">Categoria</label>
+                <input type="text" list="categorias-produto" className="w-full p-3 md:p-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-400 text-base md:text-sm" value={editCategoria} onChange={(e) => setEditCategoria(e.target.value)} placeholder="Ex: Salgados" />
+              </div>
+
+              {['revenda', 'sem_controle'].includes(produtoParaEditar.modo_estoque) && (
+                <label className="flex items-start gap-3 p-3 rounded-xl border bg-gray-50 cursor-pointer">
+                  <input type="checkbox" className="w-5 h-5 mt-0.5 accent-cafe-primary" checked={editControlarEstoque} onChange={(e) => setEditControlarEstoque(e.target.checked)} />
+                  <span className="text-sm"><strong>Controlar estoque</strong><br /><span className="text-gray-500">Desmarque para itens preparados na hora (cafés, lanches): vendem sem limite de quantidade.</span></span>
+                </label>
+              )}
+
+              {editControlarEstoque && (
+              <div>
                 <label className="block text-sm font-bold mb-1 text-gray-700">Alerta Mínimo de Estoque</label>
                 <input type="number" className="w-full p-3 md:p-2 border rounded-lg outline-none focus:ring-2 focus:ring-amber-400 text-base md:text-sm" value={editEstoqueMinimo} onChange={(e) => setEditEstoqueMinimo(e.target.value === '' ? '' : Number(e.target.value))} />
               </div>
+              )}
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3">
@@ -846,7 +871,11 @@ export default function CadastroRevenda({ atendente }: CadastroRevendaProps) {
       )}
 
       {/* HEADER */}
-      <h2 className="text-xl md:text-2xl font-bold text-cafe-primary mb-6 border-b pb-3">Gestão de Estoque (Produtos Prontos)</h2>
+      <div className="mb-6 border-b pb-3">
+        <h2 className="text-xl md:text-2xl font-bold text-cafe-primary">Produtos à venda e estoque</h2>
+        <p className="text-sm text-gray-500 mt-1">Tudo que aparece no PDV. Para lançar quantidade de um produto (ex.: 10 coxinhas), use <strong>Ajuste</strong> ou <strong>Comprar / Abastecer</strong>. Matéria-prima de receitas fica em <strong>Insumos</strong>.</p>
+      </div>
+      <datalist id="categorias-produto">{categoriasExistentes.map(c => <option key={c} value={c} />)}</datalist>
 
       {/* SESSÃO PRINCIPAL */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
@@ -857,7 +886,12 @@ export default function CadastroRevenda({ atendente }: CadastroRevendaProps) {
 
           <div>
             <label className="text-xs font-bold text-gray-500 uppercase">Nome</label>
-            <input type="text" className="w-full p-3 md:p-2.5 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-cafe-secondary text-base md:text-sm bg-white" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex: Refrigerante Lata" />
+            <input type="text" className="w-full p-3 md:p-2.5 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-cafe-secondary text-base md:text-sm bg-white" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex: Coxinha" />
+          </div>
+
+          <div>
+            <label className="text-xs font-bold text-gray-500 uppercase">Categoria</label>
+            <input type="text" list="categorias-produto" className="w-full p-3 md:p-2.5 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-cafe-secondary text-base md:text-sm bg-white" value={categoriaNova} onChange={(e) => setCategoriaNova(e.target.value)} placeholder="Ex: Salgados" />
           </div>
 
           <div className="flex gap-3">
@@ -888,7 +922,12 @@ export default function CadastroRevenda({ atendente }: CadastroRevendaProps) {
             </div>
           </div>
 
-          <div className="flex gap-3">
+          <label className="flex items-start gap-3 p-3 rounded-xl border bg-white cursor-pointer">
+            <input type="checkbox" className="w-5 h-5 mt-0.5 accent-cafe-primary" checked={controlarEstoque} onChange={(e) => setControlarEstoque(e.target.checked)} />
+            <span className="text-sm"><strong>Controlar estoque</strong><br /><span className="text-gray-500">Desmarque para itens preparados na hora: vendem sem limite.</span></span>
+          </label>
+
+          {controlarEstoque && <div className="flex gap-3">
             <div className="flex-1">
               <label className="text-xs font-bold text-gray-500 uppercase">Qtd Atual</label>
               <input type="number" className="w-full p-3 md:p-2.5 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-cafe-secondary text-base md:text-sm bg-white" value={quantidadeEstoque} onChange={(e) => setQuantidadeEstoque(e.target.value === '' ? '' : Number(e.target.value))} placeholder="0" />
@@ -897,7 +936,7 @@ export default function CadastroRevenda({ atendente }: CadastroRevendaProps) {
               <label className="text-xs font-bold text-gray-500 uppercase">Alerta Min.</label>
               <input type="number" className="w-full p-3 md:p-2.5 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-cafe-secondary text-base md:text-sm bg-white" value={estoqueMinimo} onChange={(e) => setEstoqueMinimo(e.target.value === '' ? '' : Number(e.target.value))} placeholder="5" />
             </div>
-          </div>
+          </div>}
 
           <button onClick={cadastrarProduto} className="w-full bg-cafe-primary hover:bg-cafe-dark text-white font-black uppercase tracking-wider py-4 md:py-3 rounded-xl shadow-md transition active:scale-95 mt-2">
             Salvar Produto
@@ -919,7 +958,8 @@ export default function CadastroRevenda({ atendente }: CadastroRevendaProps) {
           {/* VIEW MOBILE: Cards */}
           <div className="md:hidden space-y-3 overflow-y-auto max-h-[60vh] pb-4">
             {produtosFiltrados.map(p => {
-              const alertaEstoque = p.quantidade_estoque <= p.estoque_minimo;
+              const semControle = p.modo_estoque === 'sem_controle';
+              const alertaEstoque = !semControle && p.quantidade_estoque <= p.estoque_minimo;
               return (
                 <div key={p.id} className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex flex-col gap-3">
                   <div className="flex justify-between items-start">
@@ -927,14 +967,15 @@ export default function CadastroRevenda({ atendente }: CadastroRevendaProps) {
                     <span className="text-green-600 font-black text-xl">{formatarMoeda(p.preco_venda)}</span>
                   </div>
                   <div className="bg-gray-50 p-3 rounded-xl border flex justify-between items-center">
-                    <span className="text-xs font-bold text-gray-500 uppercase">Em Estoque:</span>
+                    <span className="text-xs font-bold text-gray-500 uppercase">{p.categoria || 'Sem categoria'}</span>
+                    {semControle ? <span className="text-sm font-bold text-gray-500">sem controle de estoque</span> : (
                     <span className={`font-black text-lg ${alertaEstoque ? 'text-red-600' : 'text-gray-800'}`}>
                       {p.quantidade_estoque} <span className="text-sm font-bold text-gray-500">{p.unidade_medida}</span>
-                    </span>
+                    </span>)}
                   </div>
-                  <div className={`grid ${p.modo_estoque === 'producao_lote' ? 'grid-cols-2' : 'grid-cols-3'} gap-2 mt-1`}>
+                  <div className={`grid ${p.modo_estoque === 'producao_lote' || semControle ? 'grid-cols-2' : 'grid-cols-3'} gap-2 mt-1`}>
                     {p.modo_estoque === 'producao_lote' && <button onClick={() => setProdutoParaProduzir(p)} className="bg-green-50 text-green-700 font-bold py-2.5 rounded-lg text-sm border border-green-200 active:bg-green-100 transition">Produzir</button>}
-                    <button onClick={() => setProdutoParaAjuste(p)} className="bg-amber-50 text-amber-700 font-bold py-2.5 rounded-lg text-sm border border-amber-200 active:bg-amber-100 transition">Ajuste</button>
+                    {!semControle && <button onClick={() => setProdutoParaAjuste(p)} className="bg-amber-50 text-amber-700 font-bold py-2.5 rounded-lg text-sm border border-amber-200 active:bg-amber-100 transition">Ajuste</button>}
                     <button onClick={() => abrirModalEdicao(p)} className="bg-blue-50 text-blue-700 font-bold py-2.5 rounded-lg text-sm border border-blue-200 active:bg-blue-100 transition">Editar</button>
                     <button onClick={() => setProdutoParaApagar(p.id)} className="bg-red-50 text-red-600 font-bold py-2.5 rounded-lg text-sm border border-red-200 active:bg-red-100 transition">Excluir</button>
                   </div>
@@ -952,19 +993,21 @@ export default function CadastroRevenda({ atendente }: CadastroRevendaProps) {
               </thead>
               <tbody>
                 {produtosFiltrados.map(p => {
-                  const alertaEstoque = p.quantidade_estoque <= p.estoque_minimo;
+                  const semControle = p.modo_estoque === 'sem_controle';
+                  const alertaEstoque = !semControle && p.quantidade_estoque <= p.estoque_minimo;
                   return (
                     <tr key={p.id} className="border-b hover:bg-gray-50 transition-colors">
-                      <td className="p-4 font-bold text-gray-800">{p.nome} {p.tamanho && <span className="text-xs text-gray-500 font-semibold ml-1">({p.tamanho}{p.unidade_medida})</span>}</td>
+                      <td className="p-4 font-bold text-gray-800">{p.nome} {p.tamanho && <span className="text-xs text-gray-500 font-semibold ml-1">({p.tamanho}{p.unidade_medida})</span>}<span className="block text-xs text-gray-400 font-semibold">{p.categoria || 'Sem categoria'}</span></td>
                       <td className="p-4 text-center">
+                        {semControle ? <span className="text-xs font-bold text-gray-500">sem controle</span> : (
                         <span className={`font-black px-2 py-1 rounded-lg ${alertaEstoque ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`}>
                           {p.quantidade_estoque || 0}
-                        </span>
+                        </span>)}
                       </td>
                       <td className="p-4 font-black text-green-600">{formatarMoeda(p.preco_venda)}</td>
                       <td className="p-4 text-center space-x-2">
                         {p.modo_estoque === 'producao_lote' && <button onClick={() => setProdutoParaProduzir(p)} className="text-green-700 bg-green-50 hover:bg-green-100 border border-green-100 px-3 py-1.5 rounded-lg font-bold text-xs transition">Produzir</button>}
-                        <button onClick={() => setProdutoParaAjuste(p)} className="text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-100 px-3 py-1.5 rounded-lg font-bold text-xs transition">Ajuste</button>
+                        {!semControle && <button onClick={() => setProdutoParaAjuste(p)} className="text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-100 px-3 py-1.5 rounded-lg font-bold text-xs transition">Ajuste</button>}
                         <button onClick={() => abrirModalEdicao(p)} className="text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-100 px-3 py-1.5 rounded-lg font-bold text-xs transition">Editar</button>
                         <button onClick={() => setProdutoParaApagar(p.id)} className="text-red-500 bg-red-50 hover:bg-red-100 border border-red-100 px-3 py-1.5 rounded-lg font-bold text-xs transition">Excluir</button>
                       </td>

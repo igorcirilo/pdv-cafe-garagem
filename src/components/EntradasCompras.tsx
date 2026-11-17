@@ -264,7 +264,10 @@ export default function EntradasCompras({ atendente }: EntradasComprasProps) {
       )}
 
       {/* HEADER DA PÁGINA */}
-      <h2 className="text-2xl font-black text-cafe-primary mb-6 border-b border-cafe-secondary/30 pb-3">Gestão de Compras (Ingredientes)</h2>
+      <div className="mb-6 border-b border-cafe-secondary/30 pb-3">
+        <h2 className="text-2xl font-black text-cafe-primary">Insumos (matéria-prima)</h2>
+        <p className="text-sm text-gray-600 mt-1">Ingredientes usados nas fichas técnicas (grão, leite, pão...). <strong>Insumos não aparecem no PDV.</strong> Para vender um item, cadastre-o em <strong>Produtos</strong>.</p>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
 

@@ -15,6 +15,7 @@ const mockProdutos = [
   { id: '1', nome: 'Café Expresso', categoria: 'Cafés', preco_venda: 5.50, quantidade_estoque: 10, is_receita: false },
   { id: '2', nome: 'Café com Leite', categoria: 'Cafés', preco_venda: 7.00, quantidade_estoque: 8, is_receita: false },
   { id: '3', nome: 'Croissant', categoria: 'Lanches', preco_venda: 6.50, quantidade_estoque: 5, is_receita: true },
+  { id: '4', nome: 'Cappuccino', categoria: 'Cafés', preco_venda: 10, quantidade_estoque: 0, modo_estoque: 'sem_controle' },
 ];
 
 const mockCaixa = { id: '1', status: 'aberto' };
@@ -268,5 +269,17 @@ describe('PDV no celular: fluxo de venda', () => {
     await user.click(screen.getByRole('button', { name: /FINALIZAR VENDA/ }));
     expect(await screen.findByText(/Erro ao finalizar venda: Estoque insuficiente/)).toBeInTheDocument();
     expect(screen.getByRole('dialog', { name: 'Pedido atual' })).toBeInTheDocument();
+  });
+});
+
+describe('PDV: itens sem controle de estoque', () => {
+  it('vende item sem controle mesmo com estoque zero e sem mostrar quantidade', async () => {
+    const user = userEvent.setup();
+    render(<PDVModulo atendente="Operador" />);
+    const cappuccino = await screen.findByRole('button', { name: 'Adicionar Cappuccino' });
+    expect(cappuccino).toBeEnabled();
+    expect(cappuccino).not.toHaveTextContent(/sem estoque|0 un/);
+    await user.click(cappuccino); await user.click(cappuccino); await user.click(cappuccino);
+    expect(screen.getByLabelText('3 no pedido')).toBeInTheDocument();
   });
 });

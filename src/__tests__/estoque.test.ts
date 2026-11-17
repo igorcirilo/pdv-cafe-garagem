@@ -23,3 +23,14 @@ describe('cálculos de estoque', () => {
     expect(() => converterQuantidadeParaEstoque(1, 'un', 'kg')).toThrow('não é compatível');
   });
 });
+
+import { controlaEstoqueNaVenda } from '../lib/estoque';
+describe('controlaEstoqueNaVenda', () => {
+  it('revenda controla; sem controle e ficha sob demanda não; produção em lote controla', () => {
+    expect(controlaEstoqueNaVenda('revenda', false)).toBe(true);
+    expect(controlaEstoqueNaVenda('sem_controle', false)).toBe(false);
+    expect(controlaEstoqueNaVenda('sem_controle', true)).toBe(false);
+    expect(controlaEstoqueNaVenda('producao_sob_demanda', true)).toBe(false);
+    expect(controlaEstoqueNaVenda('producao_lote', true)).toBe(true);
+  });
+});

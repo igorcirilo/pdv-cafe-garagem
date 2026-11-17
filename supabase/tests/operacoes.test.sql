@@ -192,6 +192,21 @@ begin
     and data_venda >= '2026-11-17T00:00:00-03:00' and data_venda <= '2026-11-17T23:59:59.999-03:00'), 0, 'e não no dia seguinte');
 end $$;
 
+-- 9. produto sem controle de estoque vende com estoque zero e não gera movimentação
+do $$
+declare vid text; n_mov int;
+begin
+  insert into pdv.produtos (id, nome, preco_venda, quantidade_estoque, modo_estoque) values ('expresso-livre', 'Expresso', 8.9, 0, 'sem_controle');
+  n_mov := (select count(*) from pdv.movimentacoes_estoque);
+  vid := pdv.registrar_venda(p_caixa_id => '"cx"', p_identificacao_pedido => '"Balcão"', p_total => '17.8', p_desconto => '0',
+    p_pagamentos => '[{"metodo":"PIX","valor":17.8}]', p_itens => '[{"produto_id":"expresso-livre","quantidade":2,"preco_unitario":8.9}]');
+  perform pg_temp.eq((select quantidade_estoque from pdv.produtos where id = 'expresso-livre'), 0::float8, 'estoque segue zero');
+  perform pg_temp.eq((select count(*)::int from pdv.movimentacoes_estoque), n_mov, 'sem movimentação de estoque');
+  perform pdv.cancelar_venda(to_jsonb(vid));
+  perform pg_temp.eq((select status from pdv.vendas v where v.id = vid), 'Cancelada', 'cancela sem estoque');
+  perform pg_temp.throws($q$update pdv.produtos set modo_estoque = 'qualquer' where id = 'expresso-livre'$q$, 'check', 'modo inválido recusado');
+end $$;
+
 reset role;
 select 'OK: todos os cenários passaram' as resultado;
 rollback;

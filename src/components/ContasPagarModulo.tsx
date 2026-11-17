@@ -394,7 +394,8 @@ export default function ContasPagarModulo() {
     const salvarAjusteBanco = async () => {
         if (novoSaldoBanco === '') return;
         try {
-            await db.from('conta_bancaria').update({ saldo: Number(novoSaldoBanco) }).eq('id', 1);
+            const { error } = await db.from('conta_bancaria').update({ saldo: Number(novoSaldoBanco) }).eq('id', 1);
+            if (error) throw error;
             setSaldoDigital(Number(novoSaldoBanco));
             setModalAjusteBanco(false);
             setNovoSaldoBanco('');

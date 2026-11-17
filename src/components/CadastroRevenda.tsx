@@ -35,6 +35,11 @@ type ItemCarrinhoLote = {
 
 type PagamentoMisto = { metodo: string; valor: number | '' };
 
+/** Estoque mínimo informado; vazio ou inválido usa o padrão 5, e 0 é aceito (sem alerta). */
+const estoqueMinimoValido = (valor: number | string) => {
+  const n = Number(valor);
+  return valor === '' || !Number.isFinite(n) || n < 0 ? 5 : n;
+};
 const gerarIdLote = () => globalThis.crypto.randomUUID().replace(/-/g, '').slice(0, 6).toUpperCase();
 
 interface CadastroRevendaProps {
@@ -182,17 +187,18 @@ export default function CadastroRevenda({ atendente }: CadastroRevendaProps) {
       const { data: produtoCriado, error: erroProd } = await db.from('produtos').insert([{
         nome, tipo: 'venda', preco_custo: Number(precoCusto) || 0, preco_venda: Number(precoVenda),
         unidade_medida: unidadeMedida, tamanho: tamanho !== '' ? Number(tamanho) : null,
-        quantidade_estoque: Number(quantidadeEstoque) || 0, estoque_minimo: Number(estoqueMinimo) || 5,
+        quantidade_estoque: Number(quantidadeEstoque) || 0, estoque_minimo: estoqueMinimoValido(estoqueMinimo),
         modo_estoque: 'revenda', ativo: true
       }]).select().single();
 
       if (erroProd) throw erroProd;
 
       if (Number(quantidadeEstoque) > 0) {
-        await db.from('movimentacoes_estoque').insert([{
+        const { error: erroMov } = await db.from('movimentacoes_estoque').insert([{
           produto_id: produtoCriado.id, quantidade: Number(quantidadeEstoque),
           tipo_movimento: 'Entrada - Estoque Inicial', motivo: 'Cadastro de Produto Novo', atendente
         }]);
+        if (erroMov) throw erroMov;
       }
 
       mostrarMensagem('Produto cadastrado com sucesso!', 'sucesso');
@@ -205,7 +211,8 @@ export default function CadastroRevenda({ atendente }: CadastroRevendaProps) {
   const confirmarApagarProduto = async () => {
     if (!produtoParaApagar) return;
     try {
-      await db.from('produtos').update({ ativo: false }).eq('id', produtoParaApagar);
+      const { error } = await db.from('produtos').update({ ativo: false }).eq('id', produtoParaApagar);
+      if (error) throw error;
       mostrarMensagem('Produto inativado.', 'sucesso');
       carregarDados();
     } catch (error) { console.error(error); mostrarMensagem('Erro ao inativar.', 'erro'); } finally { setProdutoParaApagar(null); }
@@ -443,10 +450,11 @@ export default function CadastroRevenda({ atendente }: CadastroRevendaProps) {
   const salvarEdicaoProduto = async () => {
     if (!produtoParaEditar || !editNome || !editPrecoVenda) return;
     try {
-      await db.from('produtos').update({
+      const { error } = await db.from('produtos').update({
         nome: editNome, preco_custo: Number(editPrecoCusto) || 0, preco_venda: Number(editPrecoVenda),
-        tamanho: editTamanho !== '' ? Number(editTamanho) : null, unidade_medida: editUnidadeMedida, estoque_minimo: Number(editEstoqueMinimo) || 5
+        tamanho: editTamanho !== '' ? Number(editTamanho) : null, unidade_medida: editUnidadeMedida, estoque_minimo: estoqueMinimoValido(editEstoqueMinimo)
       }).eq('id', produtoParaEditar.id);
+      if (error) throw error;
       mostrarMensagem('Produto atualizado!', 'sucesso'); setProdutoParaEditar(null); carregarDados();
     } catch (error) { console.error(error); mostrarMensagem('Erro ao atualizar.', 'erro'); }
   };

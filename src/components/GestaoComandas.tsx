@@ -114,12 +114,14 @@ export default function GestaoComandas({ atendente }: GestaoComandasProps) {
 
         try {
             if (itemExistente) {
-                await db.from('itens_comanda').update({ quantidade: novaQtdTotal }).eq('id', itemExistente.id);
+                const { error } = await db.from('itens_comanda').update({ quantidade: novaQtdTotal }).eq('id', itemExistente.id);
+                if (error) throw error;
             } else {
-                await db.from('itens_comanda').insert([{
+                const { error } = await db.from('itens_comanda').insert([{
                     comanda_id: comandaAberta.id, produto_id: produto.id,
                     quantidade: qtdAdicionar, preco_unitario: produto.preco_venda
                 }]);
+                if (error) throw error;
             }
 
             const { data: comandaAtualizada } = await db.from('comandas').select('*, itens_comanda(*, produtos(nome))').eq('id', comandaAberta.id).single();
@@ -130,7 +132,8 @@ export default function GestaoComandas({ atendente }: GestaoComandasProps) {
 
     const removerItem = async (itemId: string) => {
         try {
-            await db.from('itens_comanda').delete().eq('id', itemId);
+            const { error } = await db.from('itens_comanda').delete().eq('id', itemId);
+            if (error) throw error;
             const { data: comandaAtualizada } = await db.from('comandas').select('*, itens_comanda(*, produtos(nome))').eq('id', comandaAberta?.id).single();
             if (comandaAtualizada) setComandaAberta(comandaAtualizada as unknown as Comanda);
             carregarDados(true);
@@ -141,11 +144,10 @@ export default function GestaoComandas({ atendente }: GestaoComandasProps) {
         try {
             const novaQuantidade = quantidadeAtual + delta;
 
-            if (novaQuantidade <= 0) {
-                await db.from('itens_comanda').delete().eq('id', itemId);
-            } else {
-                await db.from('itens_comanda').update({ quantidade: novaQuantidade }).eq('id', itemId);
-            }
+            const { error } = novaQuantidade <= 0
+                ? await db.from('itens_comanda').delete().eq('id', itemId)
+                : await db.from('itens_comanda').update({ quantidade: novaQuantidade }).eq('id', itemId);
+            if (error) throw error;
 
             const { data: comandaAtualizada } = await db.from('comandas').select('*, itens_comanda(*, produtos(nome))').eq('id', comandaAberta?.id).single();
             if (comandaAtualizada) setComandaAberta(comandaAtualizada as unknown as Comanda);

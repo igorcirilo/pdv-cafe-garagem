@@ -139,7 +139,7 @@ export default function DashboardRendimentos() {
             totalCredito += venda.valor_cartao_credito || 0;
             totalDebito += venda.valor_cartao_debito || 0;
 
-            const diaStr = venda.data_venda.split('T')[0];
+            const diaStr = dataLocalISO(new Date(venda.data_venda));
             if (!vendasPorDia[diaStr]) vendasPorDia[diaStr] = { valor: 0, qtd: 0, custo: 0 };
             vendasPorDia[diaStr].valor += venda.total;
             vendasPorDia[diaStr].qtd += 1;

@@ -182,6 +182,16 @@ begin
   perform pg_temp.throws($q$update pdv.produtos set quantidade_estoque = -1 where id = 'cafe'$q$, 'check', 'estoque negativo');
 end $$;
 
+-- 8. filtro por dia respeita o fuso de Brasília (venda às 23h30 locais = 02h30 UTC do dia seguinte)
+do $$
+begin
+  insert into pdv.vendas (id, identificacao_pedido, total, data_venda) values ('noite', 'Noite', 1, '2026-11-17T02:30:00Z');
+  perform pg_temp.eq((select count(*)::int from pdv.vendas where id = 'noite'
+    and data_venda >= '2026-11-16T00:00:00-03:00' and data_venda <= '2026-11-16T23:59:59.999-03:00'), 1, 'venda das 23h30 fica no próprio dia');
+  perform pg_temp.eq((select count(*)::int from pdv.vendas where id = 'noite'
+    and data_venda >= '2026-11-17T00:00:00-03:00' and data_venda <= '2026-11-17T23:59:59.999-03:00'), 0, 'e não no dia seguinte');
+end $$;
+
 reset role;
 select 'OK: todos os cenários passaram' as resultado;
 rollback;

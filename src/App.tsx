@@ -115,7 +115,7 @@ function App() {
       </main>
 
       {/* Celular: menu inferior fixo */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-white border-t border-gray-200 shadow-[0_-2px_10px_rgba(0,0,0,0.06)]"
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200 shadow-[0_-2px_10px_rgba(0,0,0,0.06)]"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }} aria-label="Navegação principal">
         <div className="grid grid-cols-4 h-16">
           {ABAS_RODAPE.map(id => {
@@ -141,9 +141,11 @@ function App() {
       </nav>
 
       {menuMaisAberto && (
-        <div className="md:hidden fixed inset-0 z-[45] bg-black/40" onClick={() => setMenuMaisAberto(false)}>
-          <div className="absolute inset-x-0 bg-white rounded-t-3xl p-4 pb-5 shadow-2xl max-h-[80dvh] overflow-y-auto"
-            style={{ bottom: 'var(--altura-nav-inferior, 0px)' }} onClick={e => e.stopPropagation()} role="dialog" aria-label="Mais opções">
+        // Camadas: menu inferior (z-40) < menu "Mais" (z-45, acima da barra do pedido) < janelas dos módulos (z-50+).
+        // O "Mais" ocupa só a área acima do menu inferior, que continua visível e tocável.
+        <div className="md:hidden fixed inset-x-0 top-0 z-[45] bg-black/40" style={{ bottom: 'var(--altura-nav-inferior, 0px)' }} onClick={() => setMenuMaisAberto(false)}>
+          <div className="absolute inset-x-0 bottom-0 bg-white rounded-t-3xl p-4 pb-5 shadow-2xl max-h-[80dvh] overflow-y-auto"
+            onClick={e => e.stopPropagation()} role="dialog" aria-label="Mais opções">
             {GRUPOS.filter(g => g !== 'Vender').map(grupo => (
               <div key={grupo} className="mb-4">
                 <h2 className="text-xs font-black uppercase tracking-widest text-gray-400 mb-2">{grupo}</h2>

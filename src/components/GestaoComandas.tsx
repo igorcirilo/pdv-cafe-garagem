@@ -29,7 +29,8 @@ export default function GestaoComandas({ atendente }: GestaoComandasProps) {
 
     const [modalCheckout, setModalCheckout] = useState(false);
     const [modoPagamento, setModoPagamento] = useState<'unico' | 'misto'>('unico');
-    const [metodoUnico, setMetodoUnico] = useState('PIX');
+    // Sem forma pré-selecionada: o fechamento exige escolha explícita do pagamento.
+    const [metodoUnico, setMetodoUnico] = useState<MetodoPagamento | ''>('');
     const [valorRecebidoDinheiro, setValorRecebidoDinheiro] = useState<number | ''>('');
     const [desconto, setDesconto] = useState<number | ''>('');
 
@@ -160,6 +161,8 @@ export default function GestaoComandas({ atendente }: GestaoComandasProps) {
         }
     };
 
+    const formatarMoeda = (valor: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
+
     const subtotalComandaAberta = useMemo(() => {
         return comandaAberta?.itens_comanda.reduce((acc, item) => acc + (item.preco_unitario * item.quantidade), 0) || 0;
     }, [comandaAberta]);
@@ -170,7 +173,10 @@ export default function GestaoComandas({ atendente }: GestaoComandasProps) {
     const totalPagoMisto = pagamentosMistos.reduce((acc, p) => acc + (Number(p.valor) || 0), 0);
     const faltaPagarMisto = modoPagamento === 'misto' && totalPagoMisto < totalComDesconto ? totalComDesconto - totalPagoMisto : 0;
     const trocoMisto = modoPagamento === 'misto' && totalPagoMisto > totalComDesconto ? totalPagoMisto - totalComDesconto : 0;
-    const trocoUnico = modoPagamento === 'unico' && metodoUnico === 'Dinheiro' && Number(valorRecebidoDinheiro) > totalComDesconto ? Number(valorRecebidoDinheiro) - totalComDesconto : 0;
+    // Dinheiro sem valor informado conta como valor exato.
+    const recebidoDinheiro = valorRecebidoDinheiro === '' ? totalComDesconto : Number(valorRecebidoDinheiro);
+    const trocoUnico = modoPagamento === 'unico' && metodoUnico === 'Dinheiro' && recebidoDinheiro > totalComDesconto ? recebidoDinheiro - totalComDesconto : 0;
+    const pagamentoEscolhido = modoPagamento === 'misto' || metodoUnico !== '';
 
     const confirmarExclusao = () => {
         setConfirmacao({
@@ -193,7 +199,7 @@ export default function GestaoComandas({ atendente }: GestaoComandasProps) {
     const abrirCheckout = () => {
         if (!comandaAberta || comandaAberta.itens_comanda.length === 0) return mostrarMensagem('A comanda está vazia.', 'aviso');
         setModoPagamento('unico');
-        setMetodoUnico('PIX');
+        setMetodoUnico('');
         setValorRecebidoDinheiro('');
         setDesconto('');
         setPagamentosMistos([{ metodo: 'PIX', valor: '' }, { metodo: 'Dinheiro', valor: '' }]);
@@ -203,10 +209,11 @@ export default function GestaoComandas({ atendente }: GestaoComandasProps) {
     const finalizarVenda = async () => {
         if (!comandaAberta) return;
         if (valorDesconto < 0 || valorDesconto > subtotalComandaAberta) return mostrarMensagem('O desconto deve estar entre zero e o subtotal.', 'aviso');
+        if (modoPagamento === 'unico' && !metodoUnico) return mostrarMensagem('Escolha a forma de pagamento.', 'aviso');
         const pagamentos: Pagamento[] = modoPagamento === 'unico'
             ? [{
                 metodo: metodoUnico as MetodoPagamento,
-                valor: metodoUnico === 'Dinheiro' ? Number(valorRecebidoDinheiro) : totalComDesconto,
+                valor: metodoUnico === 'Dinheiro' ? recebidoDinheiro : totalComDesconto,
             }]
             : pagamentosMistos.map(p => ({ metodo: p.metodo as MetodoPagamento, valor: Number(p.valor) || 0 }));
         const pagamento = apurarPagamentos(totalComDesconto, pagamentos);
@@ -241,15 +248,14 @@ export default function GestaoComandas({ atendente }: GestaoComandasProps) {
 
 
 
-            mostrarMensagem('Venda finalizada e estoque atualizado!', 'sucesso');
+            mostrarMensagem(`Comanda ${comandaAberta.identificacao} paga e fechada.${pagamento.troco > 0 ? ` Troco: ${formatarMoeda(pagamento.troco)}` : ''}`, 'sucesso');
             setModalCheckout(false); setComandaAberta(null);
             carregarDados(true);
 
-        } catch (error) { mostrarMensagem('Erro ao finalizar venda.', 'erro'); console.error(error); }
+        } catch (error) { console.error(error); const detalhe = error && typeof error === 'object' && 'message' in error ? `: ${String((error as { message: unknown }).message)}` : ''; mostrarMensagem(`Erro ao fechar a comanda${detalhe}. Ela continua aberta.`, 'erro'); }
         finally { setFinalizando(false); }
     };
 
-    const formatarMoeda = (valor: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
 
     if (carregando) return <div className="text-center py-10 font-bold text-cafe-primary animate-pulse">A carregar comandas...</div>;
     if (caixaAberto === false) return (<div className="max-w-md mx-auto bg-white rounded-lg shadow-lg border border-red-200 text-center my-20 p-8"><div className="text-6xl mb-6">🔒</div><h2 className="text-2xl font-bold text-red-600">Caixa Fechado</h2><p className="text-gray-500 mt-2">Abra o caixa na aba Caixa para gerir comandas.</p></div>);
@@ -275,17 +281,21 @@ export default function GestaoComandas({ atendente }: GestaoComandasProps) {
             )}
 
             {comandaAberta && !modalCheckout && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-2 sm:p-4">
-                    <div className="bg-white rounded-lg shadow-2xl p-4 md:p-6 w-full max-w-4xl h-[95vh] flex flex-col">
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-2 sm:p-4" style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))', paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>
+                    <div className="bg-white rounded-xl shadow-2xl p-3 md:p-6 w-full max-w-4xl h-full max-h-[900px] flex flex-col">
                         <div className="flex justify-between items-center mb-2 border-b pb-2">
                             <div>
                                 <h3 className="text-2xl font-black text-cafe-primary">{comandaAberta.identificacao}</h3>
                                 <span className="text-sm text-gray-500 font-semibold">Cliente: {comandaAberta.nome_cliente}</span>
                             </div>
-                            <button onClick={() => setComandaAberta(null)} className="text-gray-400 hover:text-red-500 font-bold text-2xl px-2">✕</button>
+                            <div className="flex items-center gap-1">
+                                <button onClick={confirmarExclusao} className="text-red-500 text-sm font-semibold px-2 py-2 rounded-lg hover:bg-red-50">Excluir</button>
+                                <button onClick={() => setComandaAberta(null)} className="text-cafe-primary font-bold px-3 py-2 rounded-lg hover:bg-cafe-secondary/20">← Mesas</button>
+                            </div>
                         </div>
+                        <p className="text-xs text-gray-500 mb-2">Os itens são salvos na hora. A comanda fica <strong>aberta</strong> até você fechar a conta.</p>
 
-                        <div className="flex flex-col min-h-[35%] flex-1 border-b pb-2 mb-2">
+                        <div className="flex flex-col min-h-0 flex-1 border-b pb-2 mb-2">
                             <input
                                 type="text"
                                 placeholder="🔍 Buscar produto..."
@@ -319,7 +329,7 @@ export default function GestaoComandas({ atendente }: GestaoComandasProps) {
                             </div>
                         </div>
 
-                        <div className="flex flex-col min-h-[30%] flex-1 bg-gray-50 border rounded p-2">
+                        <div className="flex flex-col min-h-0 flex-1 bg-gray-50 border rounded p-2">
                             <h4 className="text-sm font-bold text-gray-500 mb-2 uppercase tracking-wide">Itens Lançados</h4>
                             <div className="flex-1 overflow-y-auto">
                                 {comandaAberta.itens_comanda.length === 0 ? (
@@ -351,18 +361,18 @@ export default function GestaoComandas({ atendente }: GestaoComandasProps) {
                             </div>
                         </div>
 
-                        <div className="pt-4 flex flex-col md:flex-row justify-between items-center gap-4 mt-2">
-                            <button onClick={confirmarExclusao} className="w-full md:w-auto text-red-500 font-bold hover:bg-red-50 px-4 py-3 md:py-2 rounded transition order-3 md:order-1 border md:border-none border-red-200">
-                                Excluir Comanda
-                            </button>
-
-                            <div className="text-center md:text-right w-full md:w-auto order-1 md:order-2">
-                                <span className="block text-sm text-gray-500 font-semibold">Total Parcial</span>
-                                <span className="text-3xl font-black text-cafe-primary">{formatarMoeda(subtotalComandaAberta)}</span>
+                        <div className="pt-3 mt-1 border-t space-y-2 shrink-0">
+                            <div className="flex items-center justify-between gap-3">
+                                <div>
+                                    <span className="block text-xs text-gray-500 font-semibold">Total parcial</span>
+                                    <span className="text-2xl md:text-3xl font-black text-cafe-primary">{formatarMoeda(subtotalComandaAberta)}</span>
+                                </div>
+                                <button onClick={abrirCheckout} className="bg-white text-blue-700 border-2 border-blue-600 text-base font-bold px-5 py-3 rounded-lg hover:bg-blue-50 active:scale-95 transition">
+                                    Fechar conta
+                                </button>
                             </div>
-
-                            <button onClick={abrirCheckout} className="w-full md:w-auto bg-blue-600 text-white text-lg font-bold px-8 py-4 md:py-3 rounded-lg shadow hover:bg-blue-700 active:scale-95 transition order-2 md:order-3">
-                                Encerrar e Pagar
+                            <button onClick={() => { setComandaAberta(null); mostrarMensagem(`Comanda ${comandaAberta.identificacao} salva e aberta.`, 'sucesso'); }} className="w-full bg-cafe-primary text-white text-lg font-bold px-6 py-3.5 rounded-lg shadow hover:bg-cafe-dark active:scale-95 transition">
+                                ✓ Salvar e voltar às mesas
                             </button>
                         </div>
                     </div>
@@ -373,8 +383,8 @@ export default function GestaoComandas({ atendente }: GestaoComandasProps) {
                 <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-4">
                     <div className="bg-white rounded-lg shadow-2xl p-4 md:p-6 w-full max-w-md border-t-8 border-blue-600 max-h-[95vh] overflow-y-auto">
                         <div className="flex justify-between items-center mb-4 border-b pb-2">
-                            <h3 className="text-xl font-bold text-cafe-dark">Pagar: {comandaAberta?.identificacao}</h3>
-                            <button onClick={() => setModalCheckout(false)} className="text-gray-400 hover:text-red-500 font-bold text-lg px-2">✕</button>
+                            <h3 className="text-xl font-bold text-cafe-dark">Fechar conta: {comandaAberta?.identificacao}</h3>
+                            <button onClick={() => setModalCheckout(false)} className="text-cafe-primary font-bold px-3 py-2 rounded-lg hover:bg-cafe-secondary/20">Voltar</button>
                         </div>
 
                         <div className="mb-4 space-y-2">
@@ -407,13 +417,19 @@ export default function GestaoComandas({ atendente }: GestaoComandasProps) {
 
                         {modoPagamento === 'unico' && (
                             <div className="space-y-3 mb-6">
-                                <select className="w-full p-3 border border-gray-300 rounded font-bold outline-none focus:ring-2 focus:ring-blue-500 text-base bg-white" value={metodoUnico} onChange={(e) => setMetodoUnico(e.target.value)}>
-                                    <option value="PIX">PIX</option><option value="Cartão de Crédito">Cartão de Crédito</option><option value="Cartão de Débito">Cartão de Débito</option><option value="Dinheiro">Dinheiro</option>
-                                </select>
+                                <p className="text-sm font-bold text-gray-700">Como o cliente pagou?</p>
+                                <div className="grid grid-cols-4 gap-2" role="radiogroup" aria-label="Forma de pagamento">
+                                    {([['PIX', 'PIX', '⚡'], ['Dinheiro', 'Dinheiro', '💵'], ['Cartão de Crédito', 'Crédito', '💳'], ['Cartão de Débito', 'Débito', '🏧']] as const).map(([valor, rotulo, icone]) => (
+                                        <button key={valor} role="radio" aria-checked={metodoUnico === valor} onClick={() => setMetodoUnico(valor)}
+                                            className={`flex flex-col items-center justify-center gap-0.5 min-h-[60px] rounded-xl border-2 text-xs font-bold transition ${metodoUnico === valor ? 'border-blue-600 bg-blue-50 text-blue-900' : 'border-gray-200 bg-white text-gray-600'}`}>
+                                            <span className="text-xl leading-none" aria-hidden>{icone}</span>{rotulo}
+                                        </button>
+                                    ))}
+                                </div>
                                 {metodoUnico === 'Dinheiro' && (
                                     <div className="flex gap-2 items-center bg-gray-50 p-3 rounded border">
-                                        <span className="text-sm font-bold text-gray-700">Valor Recebido:</span>
-                                        <input type="number" placeholder="Troco..." className="flex-1 p-2 border rounded font-bold text-base outline-none focus:ring-2 focus:ring-blue-300" value={valorRecebidoDinheiro} onChange={(e) => setValorRecebidoDinheiro(Number(e.target.value))} />
+                                        <span className="text-sm font-bold text-gray-700">Valor recebido:</span>
+                                        <input type="number" inputMode="decimal" placeholder={formatarMoeda(totalComDesconto)} className="flex-1 p-2 border rounded font-bold text-base outline-none focus:ring-2 focus:ring-blue-300" value={valorRecebidoDinheiro} onChange={(e) => setValorRecebidoDinheiro(e.target.value === '' ? '' : Number(e.target.value))} />
                                     </div>
                                 )}
                                 {trocoUnico > 0 && <div className="text-center font-black text-blue-600 text-xl py-3 bg-blue-50 rounded border border-blue-100">Troco: {formatarMoeda(trocoUnico)}</div>}
@@ -440,7 +456,7 @@ export default function GestaoComandas({ atendente }: GestaoComandasProps) {
                             </div>
                         )}
 
-                        <button onClick={finalizarVenda} disabled={finalizando} className="w-full bg-green-600 text-white font-black text-xl py-4 rounded-lg shadow-lg hover:bg-green-700 active:scale-95 transition disabled:cursor-not-allowed disabled:opacity-70">{finalizando ? 'FINALIZANDO...' : 'CONFIRMAR E FECHAR MESA'}</button>
+                        <button onClick={finalizarVenda} disabled={finalizando || !pagamentoEscolhido} className="w-full bg-green-600 text-white font-black text-lg py-4 rounded-lg shadow-lg hover:bg-green-700 active:scale-95 transition disabled:cursor-not-allowed disabled:opacity-50">{finalizando ? 'FECHANDO...' : pagamentoEscolhido ? `Receber ${formatarMoeda(totalComDesconto)} e fechar comanda` : 'Escolha a forma de pagamento'}</button>
                     </div>
                 </div>
             )}

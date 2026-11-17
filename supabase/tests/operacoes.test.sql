@@ -207,6 +207,23 @@ begin
   perform pg_temp.throws($q$update pdv.produtos set modo_estoque = 'qualquer' where id = 'expresso-livre'$q$, 'check', 'modo inválido recusado');
 end $$;
 
+-- 10. zerar vendas: exige a palavra ZERAR; apaga movimento e mantém cadastros e estoque
+do $$
+declare n_prod int := (select count(*) from pdv.produtos); estoque_cafe float8 := (select quantidade_estoque from pdv.produtos where id = 'cafe');
+begin
+  perform pg_temp.throws($q$select pdv.zerar_vendas('zerar')$q$, 'digite ZERAR', 'palavra errada recusada');
+  perform pg_temp.throws($q$select pdv.zerar_vendas()$q$, 'digite ZERAR', 'sem confirmação recusada');
+  perform pg_temp.eq((select count(*) > 0 from pdv.vendas), true, 'havia vendas antes');
+  perform pdv.zerar_vendas('ZERAR');
+  perform pg_temp.eq((select count(*)::int from pdv.vendas) + (select count(*)::int from pdv.itens_venda) + (select count(*)::int from pdv.comandas)
+    + (select count(*)::int from pdv.controle_caixa) + (select count(*)::int from pdv.movimentacoes_caixa) + (select count(*)::int from pdv.movimentacoes_estoque), 0, 'movimento apagado');
+  perform pg_temp.eq((select saldo from pdv.conta_bancaria), 0::float8, 'saldo zerado');
+  perform pg_temp.eq((select count(*)::int from pdv.produtos), n_prod, 'produtos mantidos');
+  perform pg_temp.eq((select quantidade_estoque from pdv.produtos where id = 'cafe'), estoque_cafe, 'estoque mantido');
+  perform pg_temp.eq((select count(*) > 0 from pdv.contas_pagar), true, 'contas a pagar mantidas');
+  perform pg_temp.eq((select count(*) > 0 from pdv.insumos), true, 'insumos mantidos');
+end $$;
+
 reset role;
 select 'OK: todos os cenários passaram' as resultado;
 rollback;

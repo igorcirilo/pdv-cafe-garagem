@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { localDB } from '../lib/localDB';
+import { db } from '../lib/db';
 import { dataLocalISO, limitesDoDiaLocal } from '../lib/datas';
 
 type ProdutoVendido = { nome: string; quantidade: number; faturamento: number; custo: number; lucro: number };
@@ -41,7 +41,7 @@ export default function DashboardRendimentos() {
             let temMais = true;
 
             while (temMais) {
-                const { data, error } = await localDB
+                const { data, error } = await db
                     .from('vendas')
                     .select(`
                         *,

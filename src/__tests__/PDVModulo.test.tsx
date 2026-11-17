@@ -2,10 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import PDVModulo from '../components/PDVModulo';
-import { localDB } from '../lib/localDB';
+import { db } from '../lib/db';
 
-vi.mock('../lib/localDB', () => ({
-  localDB: {
+vi.mock('../lib/db', () => ({
+  db: {
     from: vi.fn(),
   },
 }));
@@ -22,7 +22,7 @@ describe('PDVModulo Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     
-    (localDB.from as any).mockImplementation((table: string) => {
+    (db.from as any).mockImplementation((table: string) => {
       if (table === 'controle_caixa') {
         return {
           select: () => ({
@@ -75,7 +75,7 @@ describe('PDVModulo Component', () => {
   });
 
   it('should show closed cash register message when caixa is closed', async () => {
-    (localDB.from as any).mockImplementation((table: string) => {
+    (db.from as any).mockImplementation((table: string) => {
       if (table === 'controle_caixa') {
         return {
           select: () => ({

@@ -1,4 +1,4 @@
-import { localDB } from './localDB';
+import { db } from './db';
 import { calcularConsumoReceita } from './estoque';
 
 type AjusteEstoqueVenda = {
@@ -11,17 +11,17 @@ type AjusteEstoqueVenda = {
 };
 
 async function ajustarProduto(produtoId: string, quantidade: number, direcao: 'consumir' | 'reverter', atendente: string, motivo: string, tipoSaida: string, vendaId?: string) {
-  const { data: produto, error: erroProduto } = await localDB.from('produtos').select('quantidade_estoque').eq('id', produtoId).single();
+  const { data: produto, error: erroProduto } = await db.from('produtos').select('quantidade_estoque').eq('id', produtoId).single();
   if (erroProduto || !produto) throw erroProduto || new Error('Produto não encontrado.');
 
   const delta = direcao === 'consumir' ? -quantidade : quantidade;
   const estoqueAtualizado = Number(produto.quantidade_estoque) + delta;
   if (estoqueAtualizado < 0) throw new Error('Estoque insuficiente para concluir a operação.');
 
-  const { error: erroAtualizacao } = await localDB.from('produtos').update({ quantidade_estoque: estoqueAtualizado }).eq('id', produtoId);
+  const { error: erroAtualizacao } = await db.from('produtos').update({ quantidade_estoque: estoqueAtualizado }).eq('id', produtoId);
   if (erroAtualizacao) throw erroAtualizacao;
 
-  const { error: erroMovimentacao } = await localDB.from('movimentacoes_estoque').insert([{
+  const { error: erroMovimentacao } = await db.from('movimentacoes_estoque').insert([{
     produto_id: produtoId,
     quantidade: delta,
     tipo_movimento: direcao === 'consumir' ? tipoSaida : 'Entrada - Estorno Venda',
@@ -33,17 +33,17 @@ async function ajustarProduto(produtoId: string, quantidade: number, direcao: 'c
 }
 
 async function ajustarInsumo(insumoId: string, quantidade: number, direcao: 'consumir' | 'reverter', atendente: string, motivo: string, tipoSaida: string, vendaId?: string) {
-  const { data: insumo, error: erroInsumo } = await localDB.from('insumos').select('quantidade_estoque').eq('id', insumoId).single();
+  const { data: insumo, error: erroInsumo } = await db.from('insumos').select('quantidade_estoque').eq('id', insumoId).single();
   if (erroInsumo || !insumo) throw erroInsumo || new Error('Insumo não encontrado.');
 
   const delta = direcao === 'consumir' ? -quantidade : quantidade;
   const estoqueAtualizado = Number(insumo.quantidade_estoque) + delta;
   if (estoqueAtualizado < 0) throw new Error('Estoque insuficiente para concluir a operação.');
 
-  const { error: erroAtualizacao } = await localDB.from('insumos').update({ quantidade_estoque: estoqueAtualizado }).eq('id', insumoId);
+  const { error: erroAtualizacao } = await db.from('insumos').update({ quantidade_estoque: estoqueAtualizado }).eq('id', insumoId);
   if (erroAtualizacao) throw erroAtualizacao;
 
-  const { error: erroMovimentacao } = await localDB.from('movimentacoes_estoque').insert([{
+  const { error: erroMovimentacao } = await db.from('movimentacoes_estoque').insert([{
     insumo_id: insumoId,
     quantidade: delta,
     tipo_movimento: direcao === 'consumir' ? tipoSaida : 'Entrada - Estorno Venda',
@@ -58,7 +58,7 @@ async function ajustarInsumo(insumoId: string, quantidade: number, direcao: 'con
 export async function ajustarEstoqueDaVenda(ajuste: AjusteEstoqueVenda): Promise<void> {
   if (ajuste.quantidade <= 0) throw new Error('A quantidade da venda deve ser maior que zero.');
 
-  const { data: ficha, error: erroFicha } = await localDB
+  const { data: ficha, error: erroFicha } = await db
     .from('fichas_tecnicas')
     .select('id, rendimento_porcoes')
     .eq('produto_venda_id', ajuste.produtoId)
@@ -70,7 +70,7 @@ export async function ajustarEstoqueDaVenda(ajuste: AjusteEstoqueVenda): Promise
     return;
   }
 
-  const { data: itensFicha, error: erroItensFicha } = await localDB
+  const { data: itensFicha, error: erroItensFicha } = await db
     .from('ficha_ingredientes')
     .select('produto_ingrediente_id, insumo_id, receita_base_id, quantidade_utilizada')
     .eq('ficha_id', ficha.id);
@@ -90,9 +90,9 @@ export async function ajustarEstoqueDaVenda(ajuste: AjusteEstoqueVenda): Promise
     }
 
     if (!itemFicha.receita_base_id) continue;
-    const { data: base, error: erroBase } = await localDB.from('receitas_base').select('rendimento_peso').eq('id', itemFicha.receita_base_id).single();
+    const { data: base, error: erroBase } = await db.from('receitas_base').select('rendimento_peso').eq('id', itemFicha.receita_base_id).single();
     if (erroBase || !base) throw erroBase || new Error('Receita-base não encontrada.');
-    const { data: itensBase, error: erroItensBase } = await localDB.from('receitas_base_itens').select('insumo_id, qtd_usada').eq('receita_base_id', itemFicha.receita_base_id);
+    const { data: itensBase, error: erroItensBase } = await db.from('receitas_base_itens').select('insumo_id, qtd_usada').eq('receita_base_id', itemFicha.receita_base_id);
     if (erroItensBase) throw erroItensBase;
 
     for (const itemBase of itensBase || []) {

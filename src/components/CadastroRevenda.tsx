@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { localDB } from '../lib/localDB';
+import { db } from '../lib/db';
 import { calcularCompraEmbalada } from '../lib/estoque';
 
 type Produto = {
@@ -119,14 +119,14 @@ export default function CadastroRevenda({ atendente }: CadastroRevendaProps) {
   };
 
   const carregarDados = async () => {
-    const { data: fichas } = await localDB.from('fichas_tecnicas').select('produto_venda_id');
+    const { data: fichas } = await db.from('fichas_tecnicas').select('produto_venda_id');
     const produtosComReceita = new Set(fichas?.map(f => f.produto_venda_id) || []);
 
-    const { data: prodData } = await localDB.from('produtos').select('*').eq('tipo', 'venda').eq('ativo', true).order('nome');
-    const { data: insuData } = await localDB.from('insumos').select('*').order('nome');
-    const { data: movData } = await localDB.from('movimentacoes_estoque').select('id, quantidade, tipo_movimento, motivo, atendente, created_at, produto_id, produtos!inner(nome, unidade_medida, tipo)').eq('produtos.tipo', 'venda').order('created_at', { ascending: false }).limit(50);
-    const { data: fornData } = await localDB.from('fornecedores').select('*').order('nome');
-    const { data: caixaData } = await localDB.from('controle_caixa').select('*').eq('status', 'aberto').order('data_abertura', { ascending: false }).limit(1).maybeSingle();
+    const { data: prodData } = await db.from('produtos').select('*').eq('tipo', 'venda').eq('ativo', true).order('nome');
+    const { data: insuData } = await db.from('insumos').select('*').order('nome');
+    const { data: movData } = await db.from('movimentacoes_estoque').select('id, quantidade, tipo_movimento, motivo, atendente, created_at, produto_id, produtos!inner(nome, unidade_medida, tipo)').eq('produtos.tipo', 'venda').order('created_at', { ascending: false }).limit(50);
+    const { data: fornData } = await db.from('fornecedores').select('*').order('nome');
+    const { data: caixaData } = await db.from('controle_caixa').select('*').eq('status', 'aberto').order('data_abertura', { ascending: false }).limit(1).maybeSingle();
 
     if (fornData) setFornecedores(fornData as Fornecedor[]);
     if (caixaData) setCaixaAtivo(caixaData as Caixa);
@@ -179,7 +179,7 @@ export default function CadastroRevenda({ atendente }: CadastroRevendaProps) {
     if (!nome || !precoVenda) return mostrarMensagem('Preencha pelo menos o nome e o preço de venda.', 'aviso');
 
     try {
-      const { data: produtoCriado, error: erroProd } = await localDB.from('produtos').insert([{
+      const { data: produtoCriado, error: erroProd } = await db.from('produtos').insert([{
         nome, tipo: 'venda', preco_custo: Number(precoCusto) || 0, preco_venda: Number(precoVenda),
         unidade_medida: unidadeMedida, tamanho: tamanho !== '' ? Number(tamanho) : null,
         quantidade_estoque: Number(quantidadeEstoque) || 0, estoque_minimo: Number(estoqueMinimo) || 5,
@@ -189,7 +189,7 @@ export default function CadastroRevenda({ atendente }: CadastroRevendaProps) {
       if (erroProd) throw erroProd;
 
       if (Number(quantidadeEstoque) > 0) {
-        await localDB.from('movimentacoes_estoque').insert([{
+        await db.from('movimentacoes_estoque').insert([{
           produto_id: produtoCriado.id, quantidade: Number(quantidadeEstoque),
           tipo_movimento: 'Entrada - Estoque Inicial', motivo: 'Cadastro de Produto Novo', atendente
         }]);
@@ -205,7 +205,7 @@ export default function CadastroRevenda({ atendente }: CadastroRevendaProps) {
   const confirmarApagarProduto = async () => {
     if (!produtoParaApagar) return;
     try {
-      await localDB.from('produtos').update({ ativo: false }).eq('id', produtoParaApagar);
+      await db.from('produtos').update({ ativo: false }).eq('id', produtoParaApagar);
       mostrarMensagem('Produto inativado.', 'sucesso');
       carregarDados();
     } catch (error) { console.error(error); mostrarMensagem('Erro ao inativar.', 'erro'); } finally { setProdutoParaApagar(null); }
@@ -251,7 +251,7 @@ export default function CadastroRevenda({ atendente }: CadastroRevendaProps) {
     if (!produtoParaAjuste || !ajusteQuantidade || !ajusteTipo) return mostrarMensagem('Preencha a quantidade e o tipo.', 'aviso');
 
     try {
-      const { error } = await localDB.rpc('registrar_ajuste_estoque', {
+      const { error } = await db.rpc('registrar_ajuste_estoque', {
         p_produto_id: produtoParaAjuste.id,
         p_quantidade: Number(ajusteQuantidade),
         p_tipo_movimento: ajusteTipo,
@@ -274,7 +274,7 @@ export default function CadastroRevenda({ atendente }: CadastroRevendaProps) {
     }
     setCarregando(true);
     try {
-      const { error } = await localDB.rpc('registrar_producao', {
+      const { error } = await db.rpc('registrar_producao', {
         p_produto_id: produtoParaProduzir.id,
         p_quantidade: Number(quantidadeProducao),
         p_atendente: atendente,
@@ -417,7 +417,7 @@ export default function CadastroRevenda({ atendente }: CadastroRevendaProps) {
           valor_linha: valorLinha,
         };
       });
-      const { error } = await localDB.rpc('registrar_compra_lote_insumos', {
+      const { error } = await db.rpc('registrar_compra_lote_insumos', {
         p_lote_id: loteId,
         p_fornecedor_id: fornecedorLoteId || null,
         p_itens: itensParaRegistrar,
@@ -443,7 +443,7 @@ export default function CadastroRevenda({ atendente }: CadastroRevendaProps) {
   const salvarEdicaoProduto = async () => {
     if (!produtoParaEditar || !editNome || !editPrecoVenda) return;
     try {
-      await localDB.from('produtos').update({
+      await db.from('produtos').update({
         nome: editNome, preco_custo: Number(editPrecoCusto) || 0, preco_venda: Number(editPrecoVenda),
         tamanho: editTamanho !== '' ? Number(editTamanho) : null, unidade_medida: editUnidadeMedida, estoque_minimo: Number(editEstoqueMinimo) || 5
       }).eq('id', produtoParaEditar.id);

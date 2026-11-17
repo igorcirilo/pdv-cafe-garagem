@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { localDB } from '../lib/localDB';
+import { db } from '../lib/db';
 import { apurarPagamentos, type MetodoPagamento, type Pagamento } from '../lib/money';
 
 type Produto = { id: string; nome: string; preco_venda: number; preco_custo: number; tipo: string; is_receita?: boolean; quantidade_estoque: number };
@@ -56,7 +56,7 @@ export default function GestaoComandas({ atendente }: GestaoComandasProps) {
     const carregarDados = async (silencioso = false) => {
         if (!silencioso) setCarregando(true);
 
-        const { data: caixaData } = await localDB.from('controle_caixa').select('id').eq('status', 'aberto').limit(1).maybeSingle();
+        const { data: caixaData } = await db.from('controle_caixa').select('id').eq('status', 'aberto').limit(1).maybeSingle();
         if (!caixaData) {
             setCaixaAberto(false);
             if (!silencioso) setCarregando(false);
@@ -65,7 +65,7 @@ export default function GestaoComandas({ atendente }: GestaoComandasProps) {
         setCaixaAberto(true);
         setCaixaId(caixaData.id);
 
-        const { data: comandasData } = await localDB
+        const { data: comandasData } = await db
             .from('comandas')
             .select('*, itens_comanda(*, produtos(nome))')
             .eq('status', 'aberta')
@@ -73,8 +73,8 @@ export default function GestaoComandas({ atendente }: GestaoComandasProps) {
 
         if (comandasData) setComandas(comandasData as unknown as Comanda[]);
 
-        const { data: prodData } = await localDB.from('produtos').select('*').eq('tipo', 'venda').eq('ativo', true).order('nome');
-        const { data: fichas } = await localDB.from('fichas_tecnicas').select('produto_venda_id');
+        const { data: prodData } = await db.from('produtos').select('*').eq('tipo', 'venda').eq('ativo', true).order('nome');
+        const { data: fichas } = await db.from('fichas_tecnicas').select('produto_venda_id');
         const fichasIds = new Set(fichas?.map(f => f.produto_venda_id) || []);
 
         if (prodData) {
@@ -89,7 +89,7 @@ export default function GestaoComandas({ atendente }: GestaoComandasProps) {
     const criarComanda = async () => {
         if (!novaIdentificacao) return mostrarMensagem('Informe a identificação (ex: Mesa 1).', 'aviso');
         try {
-            const { error } = await localDB.from('comandas').insert([{
+            const { error } = await db.from('comandas').insert([{
                 identificacao: novaIdentificacao, nome_cliente: novoCliente || 'Não informado', atendente
             }]);
             if (error) throw error;
@@ -114,15 +114,15 @@ export default function GestaoComandas({ atendente }: GestaoComandasProps) {
 
         try {
             if (itemExistente) {
-                await localDB.from('itens_comanda').update({ quantidade: novaQtdTotal }).eq('id', itemExistente.id);
+                await db.from('itens_comanda').update({ quantidade: novaQtdTotal }).eq('id', itemExistente.id);
             } else {
-                await localDB.from('itens_comanda').insert([{
+                await db.from('itens_comanda').insert([{
                     comanda_id: comandaAberta.id, produto_id: produto.id,
                     quantidade: qtdAdicionar, preco_unitario: produto.preco_venda
                 }]);
             }
 
-            const { data: comandaAtualizada } = await localDB.from('comandas').select('*, itens_comanda(*, produtos(nome))').eq('id', comandaAberta.id).single();
+            const { data: comandaAtualizada } = await db.from('comandas').select('*, itens_comanda(*, produtos(nome))').eq('id', comandaAberta.id).single();
             if (comandaAtualizada) setComandaAberta(comandaAtualizada as unknown as Comanda);
             carregarDados(true);
         } catch (err) { console.error(err); mostrarMensagem('Erro ao adicionar item.', 'erro'); }
@@ -130,8 +130,8 @@ export default function GestaoComandas({ atendente }: GestaoComandasProps) {
 
     const removerItem = async (itemId: string) => {
         try {
-            await localDB.from('itens_comanda').delete().eq('id', itemId);
-            const { data: comandaAtualizada } = await localDB.from('comandas').select('*, itens_comanda(*, produtos(nome))').eq('id', comandaAberta?.id).single();
+            await db.from('itens_comanda').delete().eq('id', itemId);
+            const { data: comandaAtualizada } = await db.from('comandas').select('*, itens_comanda(*, produtos(nome))').eq('id', comandaAberta?.id).single();
             if (comandaAtualizada) setComandaAberta(comandaAtualizada as unknown as Comanda);
             carregarDados(true);
         } catch (err) { console.error(err); mostrarMensagem('Erro ao remover item.', 'erro'); }
@@ -142,12 +142,12 @@ export default function GestaoComandas({ atendente }: GestaoComandasProps) {
             const novaQuantidade = quantidadeAtual + delta;
 
             if (novaQuantidade <= 0) {
-                await localDB.from('itens_comanda').delete().eq('id', itemId);
+                await db.from('itens_comanda').delete().eq('id', itemId);
             } else {
-                await localDB.from('itens_comanda').update({ quantidade: novaQuantidade }).eq('id', itemId);
+                await db.from('itens_comanda').update({ quantidade: novaQuantidade }).eq('id', itemId);
             }
 
-            const { data: comandaAtualizada } = await localDB.from('comandas').select('*, itens_comanda(*, produtos(nome))').eq('id', comandaAberta?.id).single();
+            const { data: comandaAtualizada } = await db.from('comandas').select('*, itens_comanda(*, produtos(nome))').eq('id', comandaAberta?.id).single();
             if (comandaAtualizada) setComandaAberta(comandaAtualizada as unknown as Comanda);
             carregarDados(true);
 
@@ -176,7 +176,7 @@ export default function GestaoComandas({ atendente }: GestaoComandasProps) {
             msg: 'Esta ação não pode ser desfeita. Tem certeza que deseja apagar esta mesa?',
             onConfirm: async () => {
                 try {
-                    const { error } = await localDB.from('comandas').delete().eq('id', comandaAberta?.id);
+                    const { error } = await db.from('comandas').delete().eq('id', comandaAberta?.id);
                     if (error) throw error;
                     mostrarMensagem('Comanda excluída!', 'sucesso');
                     setComandaAberta(null);
@@ -224,7 +224,7 @@ export default function GestaoComandas({ atendente }: GestaoComandasProps) {
                 preco_unitario: item.preco_unitario,
                 custo_unitario: produtos.find(produto => produto.id === item.produto_id)?.preco_custo || 0,
             }));
-            const { error: erroVenda } = await localDB.rpc('registrar_venda', {
+            const { error: erroVenda } = await db.rpc('registrar_venda', {
                 p_caixa_id: caixaId,
                 p_comanda_id: comandaAberta.id,
                 p_identificacao_pedido: `Comanda: ${comandaAberta.identificacao}`,

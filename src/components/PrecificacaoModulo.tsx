@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { localDB } from '../lib/localDB';
+import { db } from '../lib/db';
 
 type Insumo = { id: string; nome: string; unidade_medida: string; preco_total_pago: number; qtd_embalagem: number; fator_correcao: number; preco_custo: number; quantidade_estoque: number; estoque_minimo: number; };
 type ReceitaBase = { id: string; nome: string; rendimento_peso: number; unidade_medida: string; custo_total: number; custo_por_unidade: number; };
@@ -50,11 +50,11 @@ export default function PrecificacaoModulo() {
     const carregarDados = async () => {
         setCarregando(true);
         try {
-            const { data: dProdutos } = await localDB.from('produtos').select('*').order('nome');
-            const { data: dInsumos } = await localDB.from('insumos').select('*').order('nome');
-            const { data: dBases } = await localDB.from('receitas_base').select('*').order('nome');
-            const { data: dFichas } = await localDB.from('fichas_tecnicas').select('*, produtos!inner(nome, preco_venda, modo_estoque)');
-            const { data: dParam } = await localDB.from('parametros_precificacao').select('*').maybeSingle();
+            const { data: dProdutos } = await db.from('produtos').select('*').order('nome');
+            const { data: dInsumos } = await db.from('insumos').select('*').order('nome');
+            const { data: dBases } = await db.from('receitas_base').select('*').order('nome');
+            const { data: dFichas } = await db.from('fichas_tecnicas').select('*, produtos!inner(nome, preco_venda, modo_estoque)');
+            const { data: dParam } = await db.from('parametros_precificacao').select('*').maybeSingle();
 
             if (dProdutos) {
                 setProdutosPDV(dProdutos.filter(p => p.tipo === 'venda' && p.ativo) as unknown as ProdutoPDV[]);
@@ -89,7 +89,7 @@ export default function PrecificacaoModulo() {
         if (preco <= 0 || qtd <= 0 || fc <= 0) return mostrarMensagem('Preço, quantidade e fator precisam ser maiores que zero.', 'aviso');
         const custoUnitario = (preco / qtd) * fc;
 
-        const { error } = await localDB.from('insumos').insert([{
+        const { error } = await db.from('insumos').insert([{
             nome: novoInsumo.nome,
             unidade_medida: novoInsumo.unidade,
             preco_total_pago: preco,
@@ -106,7 +106,7 @@ export default function PrecificacaoModulo() {
     };
 
     const deletarInsumo = async (id: string) => {
-        const { error } = await localDB.from('insumos').delete().eq('id', id);
+        const { error } = await db.from('insumos').delete().eq('id', id);
         if (error?.code === '23503') return mostrarMensagem('Este insumo já está em uma receita e não pode ser removido.', 'aviso');
         if (error) return mostrarMensagem('Erro ao remover insumo.', 'erro');
         carregarDados();
@@ -132,7 +132,7 @@ export default function PrecificacaoModulo() {
         const fc = Number(edicaoInsumo.fc) || 1;
         if (preco < 0 || qtd <= 0 || fc <= 0) return mostrarMensagem('Quantidade e fator precisam ser maiores que zero.', 'aviso');
 
-        const { error } = await localDB.from('insumos').update({
+        const { error } = await db.from('insumos').update({
             nome: edicaoInsumo.nome.trim(),
             unidade_medida: edicaoInsumo.unidade,
             preco_total_pago: preco,
@@ -155,7 +155,7 @@ export default function PrecificacaoModulo() {
     const salvarBase = async () => {
         if (!novaBase.nome || !novaBase.rendimento) return mostrarMensagem('Preencha nome e rendimento', 'aviso');
         if (Number(novaBase.rendimento) <= 0) return mostrarMensagem('O rendimento precisa ser maior que zero.', 'aviso');
-        const { error } = await localDB.from('receitas_base').insert([{
+        const { error } = await db.from('receitas_base').insert([{
             nome: novaBase.nome, rendimento_peso: Number(novaBase.rendimento), unidade_medida: novaBase.unidade
         }]);
         if (error) return mostrarMensagem('Erro ao salvar base', 'erro');
@@ -165,15 +165,15 @@ export default function PrecificacaoModulo() {
     };
 
     const abrirBase = async (base: ReceitaBase) => {
-        const { data: baseAtualizada, error } = await localDB.from('receitas_base').select('*').eq('id', base.id).single();
+        const { data: baseAtualizada, error } = await db.from('receitas_base').select('*').eq('id', base.id).single();
         if (error || !baseAtualizada) return mostrarMensagem('Não foi possível abrir a receita-base.', 'erro');
         setBaseSelecionada(baseAtualizada as ReceitaBase);
-        const { data } = await localDB.from('receitas_base_itens').select('*, insumos(nome, unidade_medida)').eq('receita_base_id', base.id);
+        const { data } = await db.from('receitas_base_itens').select('*, insumos(nome, unidade_medida)').eq('receita_base_id', base.id);
         if (data) setItensBase(data as unknown as ReceitaItem[]);
     };
 
     const recalcularCustosCMV = async () => {
-        const { error } = await localDB.rpc('recalcular_custos_cmv');
+        const { error } = await db.rpc('recalcular_custos_cmv');
         if (error) throw error;
         await carregarDados();
     };
@@ -186,7 +186,7 @@ export default function PrecificacaoModulo() {
         if (qtd <= 0) return mostrarMensagem('A quantidade precisa ser maior que zero.', 'aviso');
         const custoCalc = qtd * insumo.preco_custo;
 
-        const { error } = await localDB.from('receitas_base_itens').insert([{
+        const { error } = await db.from('receitas_base_itens').insert([{
             receita_base_id: baseSelecionada.id, insumo_id: insumo.id, qtd_usada: qtd, custo_calculado: custoCalc
         }]);
         if (error) return mostrarMensagem('Não foi possível adicionar o insumo à receita-base.', 'erro');
@@ -202,7 +202,7 @@ export default function PrecificacaoModulo() {
     };
 
     const removerItemBase = async (id: string) => {
-        const { error } = await localDB.from('receitas_base_itens').delete().eq('id', id);
+        const { error } = await db.from('receitas_base_itens').delete().eq('id', id);
         if (error) return mostrarMensagem('Não foi possível remover o item da receita-base.', 'erro');
         if (baseSelecionada) {
             try {
@@ -218,11 +218,11 @@ export default function PrecificacaoModulo() {
     const salvarFicha = async () => {
         if (!novaFicha.produto_id || !novaFicha.rendimento) return mostrarMensagem('Preencha os campos', 'aviso');
         if (Number(novaFicha.rendimento) <= 0) return mostrarMensagem('O rendimento precisa ser maior que zero.', 'aviso');
-        const { error } = await localDB.from('fichas_tecnicas').insert([{
+        const { error } = await db.from('fichas_tecnicas').insert([{
             produto_venda_id: novaFicha.produto_id, rendimento_porcoes: Number(novaFicha.rendimento)
         }]);
         if (error) return mostrarMensagem('Erro ao salvar ficha (produto já possui ficha?)', 'erro');
-        const { error: erroModo } = await localDB.from('produtos').update({ modo_estoque: novaFicha.modo_estoque }).eq('id', novaFicha.produto_id);
+        const { error: erroModo } = await db.from('produtos').update({ modo_estoque: novaFicha.modo_estoque }).eq('id', novaFicha.produto_id);
         if (erroModo) return mostrarMensagem('Ficha criada, mas não foi possível salvar o modo de estoque.', 'erro');
         mostrarMensagem('Ficha Técnica criada!', 'sucesso');
         setNovaFicha({ produto_id: '', rendimento: '1', modo_estoque: 'producao_sob_demanda' });
@@ -230,16 +230,16 @@ export default function PrecificacaoModulo() {
     };
 
     const abrirFicha = async (ficha: FichaProduto) => {
-        const { data: fichaAtualizada, error } = await localDB.from('fichas_tecnicas').select('*, produtos!inner(nome, preco_venda, modo_estoque)').eq('id', ficha.id).single();
+        const { data: fichaAtualizada, error } = await db.from('fichas_tecnicas').select('*, produtos!inner(nome, preco_venda, modo_estoque)').eq('id', ficha.id).single();
         if (error || !fichaAtualizada) return mostrarMensagem('Não foi possível abrir a ficha técnica.', 'erro');
         setFichaSelecionada(fichaAtualizada as unknown as FichaProduto);
-        const { data } = await localDB.from('ficha_ingredientes').select('*, insumos(nome, unidade_medida), receitas_base(nome, unidade_medida)').eq('ficha_id', ficha.id);
+        const { data } = await db.from('ficha_ingredientes').select('*, insumos(nome, unidade_medida), receitas_base(nome, unidade_medida)').eq('ficha_id', ficha.id);
         if (data) setItensFicha(data as unknown as FichaItem[]);
     };
 
     const salvarModoEstoque = async (modo: ModoEstoque) => {
         if (!fichaSelecionada) return;
-        const { error } = await localDB.from('produtos').update({ modo_estoque: modo }).eq('id', fichaSelecionada.produto_venda_id);
+        const { error } = await db.from('produtos').update({ modo_estoque: modo }).eq('id', fichaSelecionada.produto_venda_id);
         if (error) return mostrarMensagem('Não foi possível atualizar o modo de estoque.', 'erro');
         const fichaAtualizada = { ...fichaSelecionada, produtos: { ...fichaSelecionada.produtos, modo_estoque: modo } };
         setFichaSelecionada(fichaAtualizada);
@@ -267,7 +267,7 @@ export default function PrecificacaoModulo() {
         }
         payload.custo_calculado = custoCalc;
 
-        const { error } = await localDB.from('ficha_ingredientes').insert([payload]);
+        const { error } = await db.from('ficha_ingredientes').insert([payload]);
         if (error) return mostrarMensagem('Não foi possível adicionar o item à ficha técnica.', 'erro');
         try {
             await recalcularCustosCMV();
@@ -280,7 +280,7 @@ export default function PrecificacaoModulo() {
     };
 
     const removerItemFicha = async (id: string) => {
-        const { error } = await localDB.from('ficha_ingredientes').delete().eq('id', id);
+        const { error } = await db.from('ficha_ingredientes').delete().eq('id', id);
         if (error) return mostrarMensagem('Não foi possível remover o item da ficha técnica.', 'erro');
         if (fichaSelecionada) {
             try {
@@ -294,7 +294,7 @@ export default function PrecificacaoModulo() {
     };
 
     const salvarParametros = async () => {
-        const { error } = await localDB.from('parametros_precificacao').update(parametros).eq('id', 1);
+        const { error } = await db.from('parametros_precificacao').update(parametros).eq('id', 1);
         if (error) mostrarMensagem('Erro ao salvar parâmetros', 'erro');
         else mostrarMensagem('Parâmetros globais atualizados!', 'sucesso');
     };

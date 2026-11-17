@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { localDB } from '../lib/localDB';
+import { db } from '../lib/db';
 import { apurarPagamentos, type MetodoPagamento, type Pagamento } from '../lib/money';
 
 type ProdutoVenda = { id: string; nome: string; preco_venda: number; preco_custo: number; quantidade_estoque: number; is_receita: boolean; };
@@ -50,10 +50,10 @@ export default function PDVModulo({ atendente }: PDVModuloProps) {
   };
 
   const carregarProdutos = async () => {
-    const { data: produtosData } = await localDB.from('produtos').select('*').eq('tipo', 'venda').eq('ativo', true).order('nome');
+    const { data: produtosData } = await db.from('produtos').select('*').eq('tipo', 'venda').eq('ativo', true).order('nome');
 
     // Apontando para a tabela original
-    const { data: fichasData } = await localDB.from('fichas_tecnicas').select('produto_venda_id');
+    const { data: fichasData } = await db.from('fichas_tecnicas').select('produto_venda_id');
     const fichasIds = new Set(fichasData?.map(f => f.produto_venda_id));
 
     if (produtosData) {
@@ -66,7 +66,7 @@ export default function PDVModulo({ atendente }: PDVModuloProps) {
 
   useEffect(() => {
     const iniciarPDV = async () => {
-      const { data: caixaData } = await localDB.from('controle_caixa').select('id').eq('status', 'aberto').limit(1).maybeSingle();
+      const { data: caixaData } = await db.from('controle_caixa').select('id').eq('status', 'aberto').limit(1).maybeSingle();
       if (!caixaData) return setCaixaAberto(false);
       setCaixaAberto(true);
       setCaixaId(caixaData.id);
@@ -140,7 +140,7 @@ export default function PDVModulo({ atendente }: PDVModuloProps) {
       const itensParaInserir = carrinho.map(item => ({
         produto_id: item.produto.id, quantidade: item.quantidade, preco_unitario: item.produto.preco_venda, custo_unitario: item.produto.preco_custo
       }));
-      const { error: erroVenda } = await localDB.rpc('registrar_venda', {
+      const { error: erroVenda } = await db.rpc('registrar_venda', {
         p_caixa_id: caixaId,
         p_identificacao_pedido: identificacaoFinal,
         p_total: totalComDesconto,

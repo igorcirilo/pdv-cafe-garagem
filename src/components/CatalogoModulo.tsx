@@ -1,19 +1,19 @@
 import { useEffect,useState } from 'react';
-import { localDB } from '../lib/localDB';
+import { db } from '../lib/db';
 type Produto = {id:string;nome:string;categoria:string|null;preco_venda:number;ativo:boolean};
 const grupos=['Cafés','Especiais','Adicionais','Lanches','Salgados','Pizzas','Sobremesas','Bebidas'];
 const moeda=(n:number)=>n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 export default function CatalogoModulo() {
   const [produtos,setProdutos]=useState<Produto[]>([]),[busca,setBusca]=useState(''),[grupo,setGrupo]=useState('Todos');
   const [edicao,setEdicao]=useState<Produto|null>(null),[preco,setPreco]=useState(''),[mensagem,setMensagem]=useState(''),[salvando,setSalvando]=useState(false);
-  async function carregar(){const {data,error}=await localDB.from('produtos').select('*').eq('tipo','venda').eq('ativo',true).order('nome');if(error)setMensagem(error.message);else setProdutos(data as Produto[]);}
+  async function carregar(){const {data,error}=await db.from('produtos').select('*').eq('tipo','venda').eq('ativo',true).order('nome');if(error)setMensagem(error.message);else setProdutos(data as Produto[]);}
   useEffect(()=>{void carregar();},[]);
   async function salvar(e:React.FormEvent) {
     e.preventDefault();if(!edicao)return;
     const valor=Number(preco.replace(',','.'));
     if(!edicao.nome.trim()||!Number.isFinite(valor)||valor<0){setMensagem('Informe nome e preço válidos.');return;}
     setSalvando(true);
-    const {error}=await localDB.from('produtos').update({nome:edicao.nome.trim(),categoria:edicao.categoria,preco_venda:Math.round(valor*100)/100}).eq('id',edicao.id);
+    const {error}=await db.from('produtos').update({nome:edicao.nome.trim(),categoria:edicao.categoria,preco_venda:Math.round(valor*100)/100}).eq('id',edicao.id);
     setSalvando(false);if(error){setMensagem(error.message);return;}
     setEdicao(null);setMensagem('Produto atualizado no catálogo e no PDV.');await carregar();
   }

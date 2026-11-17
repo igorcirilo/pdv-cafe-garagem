@@ -10,10 +10,10 @@ import EntradasCompras from '../components/EntradasCompras';
 import GestaoComandas from '../components/GestaoComandas';
 import PrecificacaoModulo from '../components/PrecificacaoModulo';
 import RelatorioVendasModulo from '../components/RelatorioVendasModulo';
-import { localDB } from '../lib/localDB';
+import { db } from '../lib/db';
 
-vi.mock('../lib/localDB', () => ({
-  localDB: { from: vi.fn() },
+vi.mock('../lib/db', () => ({
+  db: { from: vi.fn() },
 }));
 
 type Resultado = { data: unknown; error: null; count?: number };
@@ -28,7 +28,7 @@ function criarConsulta(resultado: Resultado) {
 }
 
 function configurarBancoVazio() {
-  (localDB.from as ReturnType<typeof vi.fn>).mockImplementation((tabela: string) => criarConsulta({
+  (db.from as ReturnType<typeof vi.fn>).mockImplementation((tabela: string) => criarConsulta({
     data: tabela === 'controle_caixa' || tabela === 'conta_bancaria' ? null : [],
     error: null,
     count: 0,
@@ -71,7 +71,7 @@ describe('módulos operacionais', () => {
 
   it('calcula o custo unitário inicial ao cadastrar um insumo técnico', async () => {
     const consultas: Array<{ tabela: string; query: ReturnType<typeof criarConsulta> }> = [];
-    (localDB.from as ReturnType<typeof vi.fn>).mockImplementation((tabela: string) => {
+    (db.from as ReturnType<typeof vi.fn>).mockImplementation((tabela: string) => {
       const query = criarConsulta({ data: tabela === 'controle_caixa' ? null : [], error: null, count: 0 });
       consultas.push({ tabela, query });
       return query;
@@ -124,7 +124,7 @@ describe('módulos operacionais', () => {
   });
 
   it('exibe alertas de vencimento locais e permite ocultá-los', async () => {
-    (localDB.from as ReturnType<typeof vi.fn>).mockImplementation((tabela: string) => criarConsulta({
+    (db.from as ReturnType<typeof vi.fn>).mockImplementation((tabela: string) => criarConsulta({
       data: tabela === 'contas_pagar'
         ? [{ descricao: 'Conta de teste', valor: 42.5, data_vencimento: new Date().toISOString().slice(0, 10), status: 'Pendente' }]
         : [],

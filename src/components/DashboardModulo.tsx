@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { localDB } from '../lib/localDB';
+import { db } from '../lib/db';
 import { valoresIguais } from '../lib/money';
 
 type ItemVenda = { produto_id: string; quantidade: number; preco_unitario: number; custo_unitario?: number | null; produtos: { nome: string } };
@@ -44,20 +44,20 @@ export default function DashboardModulo() {
   const buscarVendasDoCaixa = async (caixaId: string, dataAbertura: string) => {
     const selecaoVendas = `*, itens_venda ( produto_id, quantidade, preco_unitario, custo_unitario, produtos ( nome ) )`;
     const [vendasVinculadas, vendasLegadas] = await Promise.all([
-      localDB.from('vendas').select(selecaoVendas).eq('caixa_id', caixaId).neq('status', 'Cancelada'),
-      localDB.from('vendas').select(selecaoVendas).is('caixa_id', null).gte('data_venda', dataAbertura).neq('status', 'Cancelada'),
+      db.from('vendas').select(selecaoVendas).eq('caixa_id', caixaId).neq('status', 'Cancelada'),
+      db.from('vendas').select(selecaoVendas).is('caixa_id', null).gte('data_venda', dataAbertura).neq('status', 'Cancelada'),
     ]);
     const vendas = [...(vendasVinculadas.data || []), ...(vendasLegadas.data || [])]
       .sort((a, b) => new Date(b.data_venda).getTime() - new Date(a.data_venda).getTime());
     setVendasHoje(vendas as unknown as Venda[]);
 
-    const { data: movs } = await localDB.from('movimentacoes_caixa').select('*').eq('caixa_id', caixaId);
+    const { data: movs } = await db.from('movimentacoes_caixa').select('*').eq('caixa_id', caixaId);
     if (movs) setMovimentacoesCaixa(movs);
   };
 
   const verificarStatusCaixa = async () => {
     setCarregando(true);
-    const { data: caixaData } = await localDB.from('controle_caixa').select('*').eq('status', 'aberto').order('data_abertura', { ascending: false }).limit(1).maybeSingle();
+    const { data: caixaData } = await db.from('controle_caixa').select('*').eq('status', 'aberto').order('data_abertura', { ascending: false }).limit(1).maybeSingle();
     if (caixaData) {
       setCaixaAtual(caixaData);
       buscarVendasDoCaixa(caixaData.id, caixaData.data_abertura);
@@ -73,7 +73,7 @@ export default function DashboardModulo() {
 
   const abrirCaixa = async () => {
     if (fundoTroco === '') return mostrarMensagem('Informe o fundo de troco inicial.', 'aviso');
-    const { data, error } = await localDB.from('controle_caixa').insert([{ fundo_inicial: Number(fundoTroco), status: 'aberto' }]).select().single();
+    const { data, error } = await db.from('controle_caixa').insert([{ fundo_inicial: Number(fundoTroco), status: 'aberto' }]).select().single();
     if (data && !error) { setCaixaAtual(data); setVendasHoje([]); setMovimentacoesCaixa([]); setFundoTroco(''); mostrarMensagem('Caixa aberto com sucesso!', 'sucesso'); }
     else { mostrarMensagem('Erro ao abrir o caixa.', 'erro'); }
   };
@@ -82,7 +82,7 @@ export default function DashboardModulo() {
     if (valorFechamentoInput === '') return mostrarMensagem('Informe a quantidade de dinheiro físico contada na gaveta.', 'aviso');
     if (!caixaAtual) return;
 
-    const { error } = await localDB.from('controle_caixa').update({
+    const { error } = await db.from('controle_caixa').update({
       status: 'fechado',
       data_fechamento: new Date().toISOString(),
       valor_informado_fechamento: Number(valorFechamentoInput)
@@ -104,7 +104,7 @@ export default function DashboardModulo() {
   const confirmarCancelamentoVenda = async () => {
     if (!vendaParaCancelar || !caixaAtual) return;
     try {
-      const { error: erroCancelamento } = await localDB.rpc('cancelar_venda', {
+      const { error: erroCancelamento } = await db.rpc('cancelar_venda', {
         p_venda_id: vendaParaCancelar.id,
         p_motivo: `Cancelamento de ${vendaParaCancelar.identificacao_pedido}`,
       });
@@ -123,8 +123,8 @@ export default function DashboardModulo() {
     setEditCredito(venda.valor_cartao_credito || '');
     setEditDebito(venda.valor_cartao_debito || '');
 
-    const { data: prodData } = await localDB.from('produtos').select('*').eq('tipo', 'venda').eq('ativo', true);
-    const { data: fichas } = await localDB.from('fichas_tecnicas').select('produto_venda_id');
+    const { data: prodData } = await db.from('produtos').select('*').eq('tipo', 'venda').eq('ativo', true);
+    const { data: fichas } = await db.from('fichas_tecnicas').select('produto_venda_id');
     const fichasIds = new Set(fichas?.map(f => f.produto_venda_id) || []);
 
     if (prodData) {
@@ -181,7 +181,7 @@ export default function DashboardModulo() {
       const novosItens = carrinhoEdicao.map(item => ({
         produto_id: item.produto_id, quantidade: item.quantidade, preco_unitario: item.preco_unitario, custo_unitario: item.custo_unitario
       }));
-      const { error: erroVenda } = await localDB.rpc('editar_venda', {
+      const { error: erroVenda } = await db.rpc('editar_venda', {
         p_venda_id: vendaEmEdicao.id,
         p_identificacao_pedido: vendaEmEdicao.identificacao_pedido,
         p_total: totalEdicao,

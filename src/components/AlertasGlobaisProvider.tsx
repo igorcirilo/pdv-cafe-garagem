@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { localDB } from '../lib/localDB';
+import { db } from '../lib/db';
 import { dataLocalISO } from '../lib/datas';
 
 type TipoAlerta = 'atrasado' | 'hoje' | 'alerta';
@@ -16,7 +16,7 @@ export default function AlertasGlobaisProvider() {
 
             const hoje = new Date(`${dataLocalISO()}T00:00:00`);
 
-            const { data: contas } = await localDB
+            const { data: contas } = await db
                 .from('contas_pagar')
                 .select('descricao, valor, data_vencimento, status')
                 .eq('status', 'Pendente');

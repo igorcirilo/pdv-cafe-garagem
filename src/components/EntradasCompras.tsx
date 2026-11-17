@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { localDB } from '../lib/localDB';
+import { db } from '../lib/db';
 import { converterQuantidadeParaEstoque, unidadesCompativeis } from '../lib/estoque';
 
 type Fornecedor = { id: string; nome: string };
@@ -79,10 +79,10 @@ export default function EntradasCompras({ atendente }: EntradasComprasProps) {
   };
 
   const carregarDados = async () => {
-    const { data: fornData } = await localDB.from('fornecedores').select('*').order('nome');
-    const { data: ingData } = await localDB.from('insumos').select('*').order('nome');
-    const { data: movData } = await localDB.from('movimentacoes_estoque').select('id, quantidade, tipo_movimento, motivo, atendente, created_at, insumos!inner(nome, unidade_medida)').not('insumo_id', 'is', null).order('created_at', { ascending: false }).limit(30);
-    const { data: caixaData } = await localDB.from('controle_caixa').select('id').eq('status', 'aberto').limit(1).maybeSingle();
+    const { data: fornData } = await db.from('fornecedores').select('*').order('nome');
+    const { data: ingData } = await db.from('insumos').select('*').order('nome');
+    const { data: movData } = await db.from('movimentacoes_estoque').select('id, quantidade, tipo_movimento, motivo, atendente, created_at, insumos!inner(nome, unidade_medida)').not('insumo_id', 'is', null).order('created_at', { ascending: false }).limit(30);
+    const { data: caixaData } = await db.from('controle_caixa').select('id').eq('status', 'aberto').limit(1).maybeSingle();
 
     if (caixaData) setCaixaAtivo(caixaData); else setCaixaAtivo(null);
     if (fornData) { setFornecedores(fornData); if (fornData.length > 0 && !fornecedorId) setFornecedorId(fornData[0].id); }
@@ -106,7 +106,7 @@ export default function EntradasCompras({ atendente }: EntradasComprasProps) {
 
   const salvarNovoFornecedor = async () => {
     if (!novoFornecedor) return;
-    const { data, error } = await localDB.from('fornecedores').insert([{ nome: novoFornecedor }]).select().single();
+    const { data, error } = await db.from('fornecedores').insert([{ nome: novoFornecedor }]).select().single();
     if (!error && data) {
       setFornecedores([...fornecedores, data]); setFornecedorId(data.id); setNovoFornecedor(''); setMostrarNovoFornecedor(false); mostrarMensagem('Fornecedor adicionado!', 'sucesso');
     } else { mostrarMensagem('Erro ao adicionar fornecedor.', 'erro'); }
@@ -115,7 +115,7 @@ export default function EntradasCompras({ atendente }: EntradasComprasProps) {
   const salvarEdicaoFornecedor = async () => {
     if (!fornecedorParaEditar || !nomeFornecedorEditado) return;
     try {
-      const { error } = await localDB.from('fornecedores').update({ nome: nomeFornecedorEditado }).eq('id', fornecedorParaEditar.id);
+      const { error } = await db.from('fornecedores').update({ nome: nomeFornecedorEditado }).eq('id', fornecedorParaEditar.id);
       if (error) throw error;
       mostrarMensagem('Fornecedor atualizado com sucesso!', 'sucesso'); carregarDados();
     } catch (err) { console.error(err); mostrarMensagem('Erro ao atualizar fornecedor.', 'erro'); } finally { setFornecedorParaEditar(null); setNomeFornecedorEditado(''); }
@@ -124,7 +124,7 @@ export default function EntradasCompras({ atendente }: EntradasComprasProps) {
   const confirmarApagarFornecedor = async () => {
     if (!fornecedorParaApagar) return;
     try {
-      const { error } = await localDB.from('fornecedores').delete().eq('id', fornecedorParaApagar.id);
+      const { error } = await db.from('fornecedores').delete().eq('id', fornecedorParaApagar.id);
       if (error && error.code === '23503') return mostrarMensagem('Bloqueado: Este fornecedor possui compras registadas.', 'aviso');
       if (error) throw error;
       mostrarMensagem('Fornecedor excluído com sucesso.', 'sucesso');
@@ -134,7 +134,7 @@ export default function EntradasCompras({ atendente }: EntradasComprasProps) {
 
   const salvarNovoIngrediente = async () => {
     if (!novoIngredienteNome || !novoIngredienteUnidade) return;
-    const { data, error } = await localDB.from('insumos').insert([{
+    const { data, error } = await db.from('insumos').insert([{
       nome: novoIngredienteNome, unidade_medida: novoIngredienteUnidade, custo_unitario: 0,
       quantidade_estoque: 0, fator_correcao: 1, qtd_embalagem: 1, preco_total_pago: 0,
     }]).select().single();
@@ -146,7 +146,7 @@ export default function EntradasCompras({ atendente }: EntradasComprasProps) {
   const confirmarApagarIngrediente = async () => {
     if (!ingredienteParaApagar) return;
     try {
-      const { error } = await localDB.from('insumos').delete().eq('id', ingredienteParaApagar);
+      const { error } = await db.from('insumos').delete().eq('id', ingredienteParaApagar);
       if (error?.code === '23503') return mostrarMensagem('Este insumo já está em uma receita ou movimentação e não pode ser removido.', 'aviso');
       if (error) throw error;
       mostrarMensagem('Ingrediente removido.', 'sucesso'); carregarDados();
@@ -168,7 +168,7 @@ export default function EntradasCompras({ atendente }: EntradasComprasProps) {
     const novoCustoUnitario = (Number(valorTotalPago) / qtdeParaEstoque) * (insumoAtual.fator_correcao || 1);
 
     try {
-      const { error } = await localDB.rpc('registrar_compra_insumo', {
+      const { error } = await db.rpc('registrar_compra_insumo', {
         p_insumo_id: ingredienteId,
         p_fornecedor_id: fornecedorId,
         p_quantidade_estoque: qtdeParaEstoque,
@@ -193,7 +193,7 @@ export default function EntradasCompras({ atendente }: EntradasComprasProps) {
     if (!ajusteInsumoId || !ajusteQuantidade || !ajusteTipo) return mostrarMensagem('Preencha o insumo, tipo e quantidade.', 'aviso');
 
     try {
-      const { error } = await localDB.rpc('registrar_ajuste_insumo', {
+      const { error } = await db.rpc('registrar_ajuste_insumo', {
         p_insumo_id: ajusteInsumoId,
         p_quantidade: Number(ajusteQuantidade),
         p_tipo_movimento: ajusteTipo,

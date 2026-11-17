@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { localDB } from '../lib/localDB';
+import { db } from '../lib/db';
 import { dataLocalISO, dataRecorrente } from '../lib/datas';
 import { valoresIguais } from '../lib/money';
 
@@ -84,20 +84,20 @@ export default function ContasPagarModulo() {
     const carregarDados = async () => {
         setCarregando(true);
 
-        const { data: fornData } = await localDB.from('fornecedores').select('*').order('nome');
+        const { data: fornData } = await db.from('fornecedores').select('*').order('nome');
         if (fornData) setFornecedores(fornData);
 
-        const { data: contasData } = await localDB
+        const { data: contasData } = await db
             .from('contas_pagar')
             .select('*, fornecedores(nome)')
             .order('data_vencimento', { ascending: true });
 
         if (contasData) setContas(contasData as unknown as Conta[]);
 
-        const { data: bancoData } = await localDB.from('conta_bancaria').select('saldo').eq('id', 1).single();
+        const { data: bancoData } = await db.from('conta_bancaria').select('saldo').eq('id', 1).single();
         if (bancoData) setSaldoDigital(Number(bancoData.saldo));
 
-        const { data: caixaData } = await localDB
+        const { data: caixaData } = await db
             .from('controle_caixa')
             .select('*')
             .eq('status', 'aberto')
@@ -110,12 +110,12 @@ export default function ContasPagarModulo() {
 
             const selecaoVendas = 'total, valor_dinheiro, valor_pix, valor_cartao_credito, valor_cartao_debito, metodo_pagamento, data_venda, id';
             const [vendasVinculadas, vendasLegadas] = await Promise.all([
-                localDB.from('vendas').select(selecaoVendas).eq('caixa_id', caixaData.id).neq('status', 'Cancelada'),
-                localDB.from('vendas').select(selecaoVendas).is('caixa_id', null).gte('data_venda', caixaData.data_abertura).neq('status', 'Cancelada'),
+                db.from('vendas').select(selecaoVendas).eq('caixa_id', caixaData.id).neq('status', 'Cancelada'),
+                db.from('vendas').select(selecaoVendas).is('caixa_id', null).gte('data_venda', caixaData.data_abertura).neq('status', 'Cancelada'),
             ]);
             setVendasHoje([...(vendasVinculadas.data || []), ...(vendasLegadas.data || [])]);
 
-            const { data: movsData } = await localDB
+            const { data: movsData } = await db
                 .from('movimentacoes_caixa')
                 .select('*')
                 .eq('caixa_id', caixaData.id);
@@ -198,7 +198,7 @@ export default function ContasPagarModulo() {
         setModalHistoricoOpen(true);
         setCaixaSelecionado(null);
         setDetalhesRelatorio(null);
-        const { data } = await localDB.from('controle_caixa').select('*').order('data_abertura', { ascending: false });
+        const { data } = await db.from('controle_caixa').select('*').order('data_abertura', { ascending: false });
         if (data) setListaCaixas(data);
     };
 
@@ -208,10 +208,10 @@ export default function ContasPagarModulo() {
         try {
             const dataFimFiltro = caixa.data_fechamento || new Date().toISOString();
             const [vendasVinculadas, vendasLegadas] = await Promise.all([
-                localDB.from('vendas').select('*').eq('caixa_id', caixa.id).neq('status', 'Cancelada'),
-                localDB.from('vendas').select('*').is('caixa_id', null).gte('data_venda', caixa.data_abertura).lte('data_venda', dataFimFiltro).neq('status', 'Cancelada'),
+                db.from('vendas').select('*').eq('caixa_id', caixa.id).neq('status', 'Cancelada'),
+                db.from('vendas').select('*').is('caixa_id', null).gte('data_venda', caixa.data_abertura).lte('data_venda', dataFimFiltro).neq('status', 'Cancelada'),
             ]);
-            const { data: movs } = await localDB.from('movimentacoes_caixa').select('*').eq('caixa_id', caixa.id).order('data_movimento', { ascending: true });
+            const { data: movs } = await db.from('movimentacoes_caixa').select('*').eq('caixa_id', caixa.id).order('data_movimento', { ascending: true });
 
             const vHoje = [...(vendasVinculadas.data || []), ...(vendasLegadas.data || [])].sort((a, b) => new Date(a.data_venda).getTime() - new Date(b.data_venda).getTime());
             const mHoje = movs || [];
@@ -371,7 +371,7 @@ export default function ContasPagarModulo() {
         if (!valorMovimento || !motivoMovimento.trim()) return mostrarMensagem('Preencha o valor e o motivo.', 'aviso');
 
         try {
-            const { error } = await localDB.from('movimentacoes_caixa').insert([{
+            const { error } = await db.from('movimentacoes_caixa').insert([{
                 caixa_id: caixaAtivo.id,
                 tipo: modalMovimento,
                 valor: Number(valorMovimento),
@@ -394,7 +394,7 @@ export default function ContasPagarModulo() {
     const salvarAjusteBanco = async () => {
         if (novoSaldoBanco === '') return;
         try {
-            await localDB.from('conta_bancaria').update({ saldo: Number(novoSaldoBanco) }).eq('id', 1);
+            await db.from('conta_bancaria').update({ saldo: Number(novoSaldoBanco) }).eq('id', 1);
             setSaldoDigital(Number(novoSaldoBanco));
             setModalAjusteBanco(false);
             setNovoSaldoBanco('');
@@ -445,7 +445,7 @@ export default function ContasPagarModulo() {
                 }
             }
 
-            const { error } = await localDB.from('contas_pagar').insert(payloads);
+            const { error } = await db.from('contas_pagar').insert(payloads);
             if (error) throw error;
 
             mostrarMensagem(isRecorrente ? `${loops} mensalidades geradas!` : 'Conta lançada!', 'sucesso');
@@ -471,7 +471,7 @@ export default function ContasPagarModulo() {
         }
 
         try {
-            const { error } = await localDB.from('contas_pagar').update({
+            const { error } = await db.from('contas_pagar').update({
                 descricao: editDescricao,
                 fornecedor_id: editFornecedorId || null,
                 valor: Number(editValor),
@@ -532,7 +532,7 @@ export default function ContasPagarModulo() {
         }
 
         try {
-            const { error: erroConta } = await localDB.rpc('baixar_conta_pagar', {
+            const { error: erroConta } = await db.rpc('baixar_conta_pagar', {
                 p_conta_id: contaParaPagar.id,
                 p_valor: valorFinal,
                 p_pagamentos: pagamentosRegistrados,
@@ -551,11 +551,11 @@ export default function ContasPagarModulo() {
         }
     };
 
-    // Cancela sem apagar o histórico; o SQLite executa o estorno financeiro em transação.
+    // Cancela sem apagar o histórico; o banco executa o estorno financeiro em transação.
     const confirmarExclusao = async () => {
         if (!contaParaApagar) return;
         try {
-            const { error } = await localDB.rpc('cancelar_conta_pagar', {
+            const { error } = await db.rpc('cancelar_conta_pagar', {
                 p_conta_id: contaParaApagar.id,
                 p_caixa_id: caixaAtivo?.id || null,
                 p_motivo: 'Cancelamento realizado pelo financeiro',

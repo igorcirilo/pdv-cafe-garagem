@@ -3,7 +3,8 @@ import { useState, lazy, Suspense } from 'react';
 const logo = '/marca/logo.png';
 const CatalogoModulo = lazy(() => import('./components/CatalogoModulo'));
 import AlertasGlobaisProvider from './components/AlertasGlobaisProvider';
-import BackupLocal from './components/BackupLocal';
+import BackupDados from './components/BackupDados';
+import { bancoConfigurado } from './lib/db';
 
 const PrecificacaoModulo = lazy(() => import('./components/PrecificacaoModulo'));
 const EntradasCompras = lazy(() => import('./components/EntradasCompras'));
@@ -19,7 +20,7 @@ type Aba = 'catalogo' | 'dashboard' | 'pdv' | 'precificacao' | 'revenda' | 'entr
 
 function App() {
   const [abaAtiva, setAbaAtiva] = useState<Aba>('pdv');
-  const atendenteNome = 'Operador local';
+  const atendenteNome = 'Operador';
 
   return (
     <div className="min-h-screen bg-cafe-bg text-cafe-dark font-sans flex flex-col">
@@ -111,7 +112,12 @@ function App() {
 
       {/* ÁREA PRINCIPAL DO SISTEMA */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-2 md:px-4 py-4 md:py-6 overflow-x-hidden">
-        <BackupLocal />
+        {!bancoConfigurado && (
+          <div role="alert" className="bg-red-50 border border-red-300 text-red-800 rounded-xl p-3 mb-4 text-sm font-bold">
+            Banco de dados não configurado: defina VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY e gere o build novamente.
+          </div>
+        )}
+        <BackupDados />
         <Suspense fallback={<div className="p-6 text-center">Carregando módulo...</div>}>
           {abaAtiva === 'catalogo' && <CatalogoModulo />}
           {abaAtiva === 'pdv' && <PDVModulo atendente={atendenteNome} />}

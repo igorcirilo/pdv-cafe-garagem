@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ajustarEstoqueDaVenda } from '../lib/operacoesEstoque';
-import { localDB } from '../lib/localDB';
+import { db } from '../lib/db';
 
-vi.mock('../lib/localDB', () => ({
-  localDB: { from: vi.fn() },
+vi.mock('../lib/db', () => ({
+  db: { from: vi.fn() },
 }));
 
 type Resultado = { data: unknown; error: null };
@@ -30,11 +30,11 @@ describe('ajustarEstoqueDaVenda', () => {
       produtoId: 'produto-1', quantidade: 0, direcao: 'consumir', atendente: 'Tiago', motivo: 'Venda',
     })).rejects.toThrow('A quantidade da venda deve ser maior que zero.');
 
-    expect(localDB.from).not.toHaveBeenCalled();
+    expect(db.from).not.toHaveBeenCalled();
   });
 
   it('baixa um produto de revenda e registra a movimentação da venda', async () => {
-    (localDB.from as ReturnType<typeof vi.fn>).mockImplementation((tabela: string) => {
+    (db.from as ReturnType<typeof vi.fn>).mockImplementation((tabela: string) => {
       const query = consulta(tabela === 'fichas_tecnicas'
         ? { data: null, error: null }
         : tabela === 'produtos'
@@ -57,7 +57,7 @@ describe('ajustarEstoqueDaVenda', () => {
   });
 
   it('baixa insumo proporcional de uma ficha técnica', async () => {
-    (localDB.from as ReturnType<typeof vi.fn>).mockImplementation((tabela: string) => {
+    (db.from as ReturnType<typeof vi.fn>).mockImplementation((tabela: string) => {
       const resultado = tabela === 'fichas_tecnicas'
         ? { data: { id: 'ficha-1', rendimento_porcoes: 4 }, error: null }
         : tabela === 'ficha_ingredientes'
@@ -83,7 +83,7 @@ describe('ajustarEstoqueDaVenda', () => {
   });
 
   it('reverte o estoque em vez de consumir quando uma venda é cancelada', async () => {
-    (localDB.from as ReturnType<typeof vi.fn>).mockImplementation((tabela: string) => {
+    (db.from as ReturnType<typeof vi.fn>).mockImplementation((tabela: string) => {
       const query = consulta(tabela === 'fichas_tecnicas'
         ? { data: null, error: null }
         : tabela === 'produtos'

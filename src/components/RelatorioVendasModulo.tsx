@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { localDB } from '../lib/localDB';
+import { db } from '../lib/db';
 import { dataLocalISO, limitesDoDiaLocal } from '../lib/datas';
 
 // Tipagens
@@ -129,7 +129,7 @@ export default function RelatorioVendasModulo() {
             const from = (pagina - 1) * itensPorPagina;
             const to = from + itensPorPagina - 1;
 
-            const { data, count, error } = await localDB
+            const { data, count, error } = await db
                 .from('vendas')
                 .select('*', { count: 'exact' })
                 .gte('data_venda', dataInicioAjustada)
@@ -164,7 +164,7 @@ export default function RelatorioVendasModulo() {
                 let temMais = true;
 
                 while (temMais) {
-                    const { data, error } = await localDB
+                    const { data, error } = await db
                         .from('vendas')
                         .select('total, valor_dinheiro, valor_pix, valor_cartao_credito, valor_cartao_debito, metodo_pagamento')
                         .gte('data_venda', dataInicioAjustada)
@@ -230,7 +230,7 @@ export default function RelatorioVendasModulo() {
         setItensVenda([]);
 
         try {
-            const { data, error } = await localDB
+            const { data, error } = await db
                 .from('itens_venda')
                 .select('*, produtos(nome)')
                 .eq('venda_id', venda.id);

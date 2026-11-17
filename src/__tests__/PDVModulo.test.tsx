@@ -7,13 +7,14 @@ import { db } from '../lib/db';
 vi.mock('../lib/db', () => ({
   db: {
     from: vi.fn(),
+    rpc: vi.fn(),
   },
 }));
 
 const mockProdutos = [
-  { id: '1', nome: 'Café Expresso', preco_venda: 5.50, quantidade_estoque: 10, is_receita: false },
-  { id: '2', nome: 'Café com Leite', preco_venda: 7.00, quantidade_estoque: 8, is_receita: false },
-  { id: '3', nome: 'Croissant', preco_venda: 6.50, quantidade_estoque: 5, is_receita: true },
+  { id: '1', nome: 'Café Expresso', categoria: 'Cafés', preco_venda: 5.50, quantidade_estoque: 10, is_receita: false },
+  { id: '2', nome: 'Café com Leite', categoria: 'Cafés', preco_venda: 7.00, quantidade_estoque: 8, is_receita: false },
+  { id: '3', nome: 'Croissant', categoria: 'Lanches', preco_venda: 6.50, quantidade_estoque: 5, is_receita: true },
 ];
 
 const mockCaixa = { id: '1', status: 'aberto' };
@@ -94,7 +95,7 @@ describe('PDVModulo Component', () => {
     
     await waitFor(() => {
       expect(screen.getByText('Caixa Fechado')).toBeInTheDocument();
-      expect(screen.getByText('Abra o caixa no Dashboard para acessar o PDV.')).toBeInTheDocument();
+      expect(screen.getByText('Abra o caixa na aba Caixa para acessar o PDV.')).toBeInTheDocument();
     });
   });
 
@@ -202,5 +203,70 @@ describe('PDVModulo Component', () => {
     
     // Component should render without errors
     expect(screen.getByText('Menu de Produtos')).toBeInTheDocument();
+  });
+});
+
+
+describe('PDV no celular: fluxo de venda', () => {
+  beforeEach(() => {
+    (db.rpc as any).mockReset().mockResolvedValue({ data: 'venda-1', error: null });
+  });
+
+  it('filtra por categoria', async () => {
+    const user = userEvent.setup();
+    render(<PDVModulo atendente="Operador" />);
+    await screen.findByRole('button', { name: 'Adicionar Croissant' });
+    await user.click(screen.getByRole('tab', { name: 'Lanches' }));
+    expect(screen.queryByRole('button', { name: 'Adicionar Café Expresso' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Adicionar Croissant' })).toBeInTheDocument();
+  });
+
+  it('toca no produto, abre o pedido, paga em dinheiro com troco e registra a venda', async () => {
+    const user = userEvent.setup();
+    render(<PDVModulo atendente="Operador" />);
+    const expresso = await screen.findByRole('button', { name: 'Adicionar Café Expresso' });
+    await user.click(expresso);
+    await user.click(expresso);
+    expect(screen.getByLabelText('2 no pedido')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Ver pedido/ }));
+    expect(screen.getByRole('dialog', { name: 'Pedido atual' })).toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: /Dinheiro/ }));
+    await user.click(screen.getByRole('button', { name: 'R$ 20' }));
+    expect(screen.getByText(/Troco:\s*R\$\s*9,00/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /FINALIZAR VENDA/ }));
+    await waitFor(() => expect(db.rpc).toHaveBeenCalledTimes(1));
+    const [nome, args] = (db.rpc as any).mock.calls[0];
+    expect(nome).toBe('registrar_venda');
+    expect(args).toMatchObject({
+      p_caixa_id: '1', p_total: 11, p_desconto: 0, p_atendente: 'Operador', p_identificacao_pedido: 'Venda Balcão',
+      p_pagamentos: [{ metodo: 'Dinheiro', valor: 11 }],
+      p_itens: [{ produto_id: '1', quantidade: 2, preco_unitario: 5.5 }],
+    });
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Pedido atual' })).toBeNull());
+    expect(screen.queryByRole('button', { name: /Ver pedido/ })).toBeNull();
+  });
+
+  it('dinheiro sem valor informado conta como valor exato', async () => {
+    const user = userEvent.setup();
+    render(<PDVModulo atendente="Operador" />);
+    await user.click(await screen.findByRole('button', { name: 'Adicionar Café com Leite' }));
+    await user.click(screen.getByRole('button', { name: /Ver pedido/ }));
+    await user.click(screen.getByRole('radio', { name: /Dinheiro/ }));
+    await user.click(screen.getByRole('button', { name: /FINALIZAR VENDA/ }));
+    await waitFor(() => expect(db.rpc).toHaveBeenCalledTimes(1));
+    expect((db.rpc as any).mock.calls[0][1].p_pagamentos).toEqual([{ metodo: 'Dinheiro', valor: 7 }]);
+  });
+
+  it('mostra o erro do banco quando a venda é recusada', async () => {
+    (db.rpc as any).mockResolvedValue({ data: null, error: { message: 'Estoque insuficiente' } });
+    const user = userEvent.setup();
+    render(<PDVModulo atendente="Operador" />);
+    await user.click(await screen.findByRole('button', { name: 'Adicionar Café Expresso' }));
+    await user.click(screen.getByRole('button', { name: /Ver pedido/ }));
+    await user.click(screen.getByRole('button', { name: /FINALIZAR VENDA/ }));
+    expect(await screen.findByText(/Erro ao finalizar venda: Estoque insuficiente/)).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Pedido atual' })).toBeInTheDocument();
   });
 });

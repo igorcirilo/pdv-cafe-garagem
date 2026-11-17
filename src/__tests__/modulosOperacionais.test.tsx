@@ -50,7 +50,7 @@ describe('módulos operacionais', () => {
   it('bloqueia a gestão de comandas sem caixa aberto', async () => {
     render(<GestaoComandas atendente="Teste" />);
     await waitFor(() => expect(screen.getByText('Caixa Fechado')).toBeInTheDocument());
-    expect(screen.getByText(/Abra o caixa no Dashboard para gerir comandas/i)).toBeInTheDocument();
+    expect(screen.getByText(/Abra o caixa na aba Caixa para gerir comandas/i)).toBeInTheDocument();
   });
 
   it('carrega a área de compras sem dados e preserva os formulários operacionais', async () => {

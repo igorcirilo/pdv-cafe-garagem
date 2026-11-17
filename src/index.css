@@ -6,3 +6,15 @@
 body {
   @apply bg-cafe-bg text-cafe-dark;
 }
+/* Altura do menu inferior fixo do celular (inclui a área segura do iPhone). Usada para não cobrir conteúdo. */
+@media (max-width: 767px) {
+  :root {
+    --altura-nav-inferior: calc(4rem + env(safe-area-inset-bottom));
+  }
+}
+
+/* Evita o destaque cinza ao tocar em botões no iOS e o atraso de duplo toque. */
+button, a, [role="button"] {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}

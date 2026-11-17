@@ -1,0 +1,185 @@
+{
+  "comandas": {
+    "atendente": "string | null",
+    "created_at": "string | null",
+    "id": "string",
+    "identificacao": "string",
+    "nome_cliente": "string | null",
+    "status": "string | null"
+  },
+  "conta_bancaria": {
+    "id": "number",
+    "saldo": "number | null"
+  },
+  "contas_pagar": {
+    "cancelada_em": "string | null",
+    "created_at": "string | null",
+    "data_pagamento": "string | null",
+    "data_vencimento": "string",
+    "descricao": "string",
+    "fornecedor_id": "string | null",
+    "id": "string",
+    "metodo_pagamento": "string | null",
+    "motivo_cancelamento": "string | null",
+    "pagamentos": "Json",
+    "status": "string | null",
+    "valor": "number",
+    "valor_original": "number | null"
+  },
+  "controle_caixa": {
+    "data_abertura": "string | null",
+    "data_fechamento": "string | null",
+    "fundo_inicial": "number",
+    "id": "string",
+    "status": "string | null",
+    "valor_informado_fechamento": "number | null"
+  },
+  "entradas": {
+    "data_entrada": "string | null",
+    "fornecedor_id": "string | null",
+    "id": "string",
+    "total_nota": "number | null"
+  },
+  "ficha_ingredientes": {
+    "custo_calculado": "number | null",
+    "ficha_id": "string | null",
+    "id": "string",
+    "insumo_id": "string | null",
+    "produto_ingrediente_id": "string | null",
+    "quantidade_utilizada": "number",
+    "receita_base_id": "string | null",
+    "secao": "string | null"
+  },
+  "fichas_produtos": {
+    "created_at": "string | null",
+    "custo_por_porcao": "number | null",
+    "custo_total_receita": "number | null",
+    "id": "string",
+    "produto_id": "string | null",
+    "rendimento_porcoes": "number | null"
+  },
+  "fichas_produtos_itens": {
+    "custo_calculado": "number | null",
+    "ficha_produto_id": "string | null",
+    "id": "string",
+    "insumo_id": "string | null",
+    "qtd_usada": "number",
+    "receita_base_id": "string | null"
+  },
+  "fichas_tecnicas": {
+    "custo_total": "number | null",
+    "id": "string",
+    "margem_lucro_desejada": "number | null",
+    "preco_sugerido": "number | null",
+    "produto_venda_id": "string | null",
+    "rendimento_porcoes": "number | null"
+  },
+  "fornecedores": {
+    "contacto": "string | null",
+    "id": "string",
+    "nome": "string"
+  },
+  "insumos": {
+    "created_at": "string | null",
+    "custo_unitario": "number | null",
+    "fator_correcao": "number | null",
+    "id": "string",
+    "nome": "string",
+    "preco_total_pago": "number | null",
+    "qtd_embalagem": "number | null",
+    "quantidade_estoque": "number | null",
+    "unidade_medida": "string"
+  },
+  "itens_comanda": {
+    "comanda_id": "string | null",
+    "created_at": "string | null",
+    "id": "string",
+    "preco_unitario": "number",
+    "produto_id": "string | null",
+    "quantidade": "number"
+  },
+  "itens_venda": {
+    "custo_unitario": "number | null",
+    "id": "string",
+    "preco_unitario": "number",
+    "produto_id": "string | null",
+    "quantidade": "number",
+    "venda_id": "string | null"
+  },
+  "movimentacoes_caixa": {
+    "caixa_id": "string | null",
+    "data_movimento": "string",
+    "descricao": "string | null",
+    "id": "string",
+    "tipo": "string",
+    "valor": "number"
+  },
+  "movimentacoes_estoque": {
+    "atendente": "string | null",
+    "created_at": "string | null",
+    "id": "string",
+    "insumo_id": "string | null",
+    "motivo": "string | null",
+    "produto_id": "string | null",
+    "quantidade": "number",
+    "tipo_movimento": "string",
+    "venda_id": "string | null"
+  },
+  "parametros_precificacao": {
+    "custos_fixos_pct": "number | null",
+    "id": "number",
+    "imposto_taxa_cartao_pct": "number | null",
+    "margem_lucro_alvo_pct": "number | null"
+  },
+  "produtos": {
+    "ativo": "boolean | null",
+    "estoque_minimo": "number | null",
+    "fator_correcao": "number | null",
+    "id": "string",
+    "nome": "string",
+    "preco_custo": "number | null",
+    "preco_total_pago": "number | null",
+    "preco_venda": "number | null",
+    "qtd_embalagem": "number | null",
+    "quantidade_estoque": "number | null",
+    "modo_estoque": "string",
+    "tamanho": "number | null",
+    "tipo": "string",
+    "unidade_medida": "string | null",
+    "categoria": "string | null"
+  },
+  "receitas_base": {
+    "created_at": "string | null",
+    "custo_por_unidade": "number | null",
+    "custo_total": "number | null",
+    "id": "string",
+    "nome": "string",
+    "rendimento_peso": "number | null",
+    "unidade_medida": "string"
+  },
+  "receitas_base_itens": {
+    "custo_calculado": "number | null",
+    "id": "string",
+    "insumo_id": "string | null",
+    "qtd_usada": "number",
+    "receita_base_id": "string | null"
+  },
+  "vendas": {
+    "atendente": "string | null",
+    "caixa_id": "string | null",
+    "cancelada_em": "string | null",
+    "data_venda": "string | null",
+    "desconto": "number | null",
+    "id": "string",
+    "identificacao_pedido": "string",
+    "metodo_pagamento": "string | null",
+    "motivo_cancelamento": "string | null",
+    "pagamentos": "Json",
+    "status": "string",
+    "total": "number",
+    "valor_cartao_credito": "number | null",
+    "valor_cartao_debito": "number | null",
+    "valor_dinheiro": "number | null",
+    "valor_pix": "number | null"
+  }
+}

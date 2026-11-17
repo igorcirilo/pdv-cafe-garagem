@@ -1,0 +1,40 @@
+ATUALIZACAO — CAFE GARAGEM
+
+1. No PDV atual, baixe um backup pelo painel de backup.
+2. Feche a janela do servidor com Ctrl+C.
+3. Extraia este ZIP em uma pasta temporaria.
+4. Copie TODO o conteudo de PDV_Cafe_Garagem para a pasta do seu PDV atual,
+   aceitando substituir os arquivos. Este pacote NAO contem uma pasta dados.
+5. Preserve sua pasta dados e o arquivo dados/pdv.sqlite.
+6. Execute INICIAR.bat, ou abra o PowerShell nessa pasta e execute:
+   node .\server\index.mjs
+7. Abra http://127.0.0.1:3210 e pressione Ctrl+F5. Entre na aba Catalogo.
+
+O catalogo de 30 produtos entra automaticamente no proximo inicio. A importacao
+acontece uma unica vez e nao sobrescreve seus precos, estoque ou vendas existentes.
+Produtos existentes com o mesmo nome sao reaproveitados sem alterar seus precos.
+Antes da importacao ha um backup automatico em dados/backups.
+A categoria e acrescentada ao banco automaticamente, sem apagar dados.
+
+Os produtos novos comecam com estoque e custo ZERO: registre a quantidade real
+em Revenda ou configure fichas tecnicas/insumos antes de vender. Nao criamos
+quantidades ou receitas ficticias. Adicionais sao vendidos como itens separados.
+
+COMO EDITAR
+- Produtos e precos: aba Catalogo > Editar. A mudanca vale tambem no PDV.
+- Estoque: aba Revenda; producao e receitas: aba Fichas.
+- Logo: substitua dist\marca\logo.png para mudar a marca exibida imediatamente.
+  Substitua tambem public\marca\logo.png para preservar a logo ao recompilar.
+  Use um PNG e mantenha o nome logo.png. Depois pressione Ctrl+F5 no navegador.
+- server\catalogo.json e o catalogo inicial; editar esse arquivo NAO altera
+  produtos ja importados. Para esses produtos, use a aba Catalogo.
+
+NODE
+O iniciador agora aceita Node.js 24 ou superior, incluindo a versao 26.
+A verificacao automatica deste pacote foi executada com Node.js 24.
+Nao e necessario reinstalar dependencias para usar a interface ja compilada.
+
+PRIMEIRA INSTALACAO
+Com Node.js 24 ou superior instalado, basta extrair e executar INICIAR.bat.
+O pacote inclui dist compilado. INSTALAR.bat serve para instalar dependencias
+e recompilar caso queira editar o codigo-fonte. TESTAR.bat executa os testes.

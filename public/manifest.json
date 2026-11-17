@@ -1,0 +1,18 @@
+{
+  "name": "Café Garagem — PDV",
+  "short_name": "Café Garagem",
+  "description": "PDV e catálogo do Café Garagem",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F3F4F6",
+  "theme_color": "#A94F08",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/marca/logo.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

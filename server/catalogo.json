@@ -1,0 +1,182 @@
+[
+  {
+    "id": "cafe-garagem-001",
+    "nome": "Expresso simples",
+    "categoria": "Cafés",
+    "preco_venda": 8.9
+  },
+  {
+    "id": "cafe-garagem-002",
+    "nome": "Expresso duplo",
+    "categoria": "Cafés",
+    "preco_venda": 8.9
+  },
+  {
+    "id": "cafe-garagem-003",
+    "nome": "Expresso com leite",
+    "categoria": "Cafés",
+    "preco_venda": 12.9
+  },
+  {
+    "id": "cafe-garagem-004",
+    "nome": "Afogatto",
+    "categoria": "Cafés",
+    "preco_venda": 14.5
+  },
+  {
+    "id": "cafe-garagem-005",
+    "nome": "Café coado de garrafa",
+    "categoria": "Cafés",
+    "preco_venda": 4.5
+  },
+  {
+    "id": "cafe-garagem-006",
+    "nome": "Café coado de garrafa com leite",
+    "categoria": "Cafés",
+    "preco_venda": 7
+  },
+  {
+    "id": "cafe-garagem-007",
+    "nome": "Capuccino P",
+    "categoria": "Especiais",
+    "preco_venda": 10.5
+  },
+  {
+    "id": "cafe-garagem-008",
+    "nome": "Capuccino G",
+    "categoria": "Especiais",
+    "preco_venda": 13
+  },
+  {
+    "id": "cafe-garagem-009",
+    "nome": "Achocolatado quente",
+    "categoria": "Especiais",
+    "preco_venda": 15
+  },
+  {
+    "id": "cafe-garagem-010",
+    "nome": "Achocolatado gelado",
+    "categoria": "Especiais",
+    "preco_venda": 15
+  },
+  {
+    "id": "cafe-garagem-011",
+    "nome": "Chá",
+    "categoria": "Especiais",
+    "preco_venda": 6
+  },
+  {
+    "id": "cafe-garagem-012",
+    "nome": "Iced Nutella / caramelo / doce de leite",
+    "categoria": "Especiais",
+    "preco_venda": 18
+  },
+  {
+    "id": "cafe-garagem-013",
+    "nome": "Chantilly",
+    "categoria": "Adicionais",
+    "preco_venda": 2.9
+  },
+  {
+    "id": "cafe-garagem-014",
+    "nome": "Nutella",
+    "categoria": "Adicionais",
+    "preco_venda": 4
+  },
+  {
+    "id": "cafe-garagem-015",
+    "nome": "Requeijão",
+    "categoria": "Adicionais",
+    "preco_venda": 4
+  },
+  {
+    "id": "cafe-garagem-016",
+    "nome": "Misto quente",
+    "categoria": "Lanches",
+    "preco_venda": 19
+  },
+  {
+    "id": "cafe-garagem-017",
+    "nome": "Misto frio",
+    "categoria": "Lanches",
+    "preco_venda": 16.5
+  },
+  {
+    "id": "cafe-garagem-018",
+    "nome": "Queijo quente",
+    "categoria": "Lanches",
+    "preco_venda": 17.9
+  },
+  {
+    "id": "cafe-garagem-019",
+    "nome": "Pão com manteiga na chapa",
+    "categoria": "Lanches",
+    "preco_venda": 12.9
+  },
+  {
+    "id": "cafe-garagem-020",
+    "nome": "Pão com margarina",
+    "categoria": "Lanches",
+    "preco_venda": 8.5
+  },
+  {
+    "id": "cafe-garagem-021",
+    "nome": "Pão com ovo",
+    "categoria": "Lanches",
+    "preco_venda": 10.5
+  },
+  {
+    "id": "cafe-garagem-022",
+    "nome": "Omelete com presunto e queijo",
+    "categoria": "Lanches",
+    "preco_venda": 19.5
+  },
+  {
+    "id": "cafe-garagem-023",
+    "nome": "Salgados",
+    "categoria": "Salgados",
+    "preco_venda": 9.9
+  },
+  {
+    "id": "cafe-garagem-024",
+    "nome": "Pizza",
+    "categoria": "Pizzas",
+    "preco_venda": 12.5
+  },
+  {
+    "id": "cafe-garagem-025",
+    "nome": "Fatia de bolo simples",
+    "categoria": "Sobremesas",
+    "preco_venda": 5
+  },
+  {
+    "id": "cafe-garagem-026",
+    "nome": "Fatia de bolo com cobertura",
+    "categoria": "Sobremesas",
+    "preco_venda": 7
+  },
+  {
+    "id": "cafe-garagem-027",
+    "nome": "Bola de sorvete",
+    "categoria": "Sobremesas",
+    "preco_venda": 6
+  },
+  {
+    "id": "cafe-garagem-028",
+    "nome": "Refrigerante lata",
+    "categoria": "Bebidas",
+    "preco_venda": 7.5
+  },
+  {
+    "id": "cafe-garagem-029",
+    "nome": "Água",
+    "categoria": "Bebidas",
+    "preco_venda": 3
+  },
+  {
+    "id": "cafe-garagem-030",
+    "nome": "Água com gás",
+    "categoria": "Bebidas",
+    "preco_venda": 3.5
+  }
+]

@@ -1,12 +1,14 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { db } from '../lib/db';
 import { controlaEstoqueNaVenda } from '../lib/estoque';
 import { apurarPagamentos, type MetodoPagamento, type Pagamento } from '../lib/money';
 
-type Produto = { id: string; nome: string; preco_venda: number; preco_custo: number; tipo: string; is_receita?: boolean; quantidade_estoque: number };
+type Produto = { id: string; nome: string; categoria?: string | null; preco_venda: number; preco_custo: number; tipo: string; is_receita?: boolean; quantidade_estoque: number };
 type ItemComanda = { id: string; produto_id: string; quantidade: number; preco_unitario: number; produtos: { nome: string } };
 type Comanda = { id: string; identificacao: string; nome_cliente: string; status: string; atendente: string; created_at: string; itens_comanda: ItemComanda[] };
 type PagamentoMisto = { metodo: string; valor: number | '' };
+
+const TODAS = 'Todas';
 
 interface GestaoComandasProps {
     atendente: string;
@@ -41,14 +43,40 @@ export default function GestaoComandas({ atendente }: GestaoComandasProps) {
     const [finalizando, setFinalizando] = useState(false);
 
     const [buscaProduto, setBuscaProduto] = useState('');
+    const [categoria, setCategoria] = useState(TODAS);
+    // Celular: uma lista por vez (adicionar produtos ou ver a comanda). Tablet/computador mostra as duas lado a lado.
+    const [abaComanda, setAbaComanda] = useState<'adicionar' | 'itens'>('adicionar');
+    // Toques rápidos em "+" são enfileirados para não perder quantidade.
+    const filaItens = useRef<Promise<unknown>>(Promise.resolve());
+    const comandaAtual = useRef<Comanda | null>(null);
+    useEffect(() => { comandaAtual.current = comandaAberta; }, [comandaAberta]);
+
+    const categorias = useMemo(() => {
+        const lista = [...new Set(produtos.map(p => p.categoria).filter((c): c is string => Boolean(c)))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+        return lista.length > 1 ? [TODAS, ...lista] : [];
+    }, [produtos]);
 
     const produtosFiltrados = useMemo(() => {
+        const termo = buscaProduto.trim().toLowerCase();
         return produtos.filter(produto =>
-            produto.nome
-                .toLowerCase()
-                .includes(buscaProduto.toLowerCase())
+            produto.nome.toLowerCase().includes(termo) && (termo !== '' || categoria === TODAS || produto.categoria === categoria)
         );
-    }, [produtos, buscaProduto]);
+    }, [produtos, buscaProduto, categoria]);
+
+    const qtdNaComanda = useMemo(() => {
+        const m = new Map<string, number>();
+        comandaAberta?.itens_comanda.forEach(i => m.set(i.produto_id, (m.get(i.produto_id) || 0) + i.quantidade));
+        return m;
+    }, [comandaAberta]);
+    const totalItensAberta = comandaAberta?.itens_comanda.reduce((acc, i) => acc + i.quantidade, 0) || 0;
+
+    const abrirComanda = (comanda: Comanda) => {
+        comandaAtual.current = comanda;
+        setComandaAberta(comanda);
+        setBuscaProduto('');
+        setCategoria(TODAS);
+        setAbaComanda(comanda.itens_comanda.length > 0 ? 'itens' : 'adicionar');
+    };
 
     const mostrarMensagem = (msg: string, tipo: 'sucesso' | 'erro' | 'aviso') => {
         setFeedback({ msg, tipo });
@@ -101,7 +129,10 @@ export default function GestaoComandas({ atendente }: GestaoComandasProps) {
         } catch (err) { console.error(err); mostrarMensagem('Erro ao abrir comanda.', 'erro'); }
     };
 
-    const adicionarItem = async (produto: Produto) => {
+    const adicionarItem = (produto: Produto) => enfileirar(() => adicionarItemAgora(produto));
+
+    const adicionarItemAgora = async (produto: Produto) => {
+        const comandaAberta = comandaAtual.current;
         if (!comandaAberta) return;
         if (!caixaId) return mostrarMensagem('Nenhum caixa aberto foi identificado. Recarregue a tela.', 'erro');
         const qtdAdicionar = Number(quantidadeAdd) || 1;
@@ -126,40 +157,39 @@ export default function GestaoComandas({ atendente }: GestaoComandasProps) {
                 if (error) throw error;
             }
 
-            const { data: comandaAtualizada } = await db.from('comandas').select('*, itens_comanda(*, produtos(nome))').eq('id', comandaAberta.id).single();
-            if (comandaAtualizada) setComandaAberta(comandaAtualizada as unknown as Comanda);
-            carregarDados(true);
+            await recarregarComanda(comandaAberta.id);
         } catch (err) { console.error(err); mostrarMensagem('Erro ao adicionar item.', 'erro'); }
     };
 
-    const removerItem = async (itemId: string) => {
-        try {
-            const { error } = await db.from('itens_comanda').delete().eq('id', itemId);
-            if (error) throw error;
-            const { data: comandaAtualizada } = await db.from('comandas').select('*, itens_comanda(*, produtos(nome))').eq('id', comandaAberta?.id).single();
-            if (comandaAtualizada) setComandaAberta(comandaAtualizada as unknown as Comanda);
-            carregarDados(true);
-        } catch (err) { console.error(err); mostrarMensagem('Erro ao remover item.', 'erro'); }
+    const enfileirar = (tarefa: () => Promise<void>) => {
+        const proxima = filaItens.current.then(tarefa);
+        filaItens.current = proxima.catch(() => undefined);
+        return proxima;
     };
 
-    const alterarQuantidadeItem = async (itemId: string, quantidadeAtual: number, delta: number) => {
-        try {
-            const novaQuantidade = quantidadeAtual + delta;
+    const recarregarComanda = async (id: string) => {
+        const { data } = await db.from('comandas').select('*, itens_comanda(*, produtos(nome))').eq('id', id).single();
+        if (data) { comandaAtual.current = data as unknown as Comanda; setComandaAberta(comandaAtual.current); }
+        carregarDados(true);
+    };
 
+    // Lê a quantidade mais recente (não a do momento do toque) para que toques rápidos somem certo.
+    const alterarQuantidadeItem = (itemId: string, delta: number | 'remover') => enfileirar(async () => {
+        const comanda = comandaAtual.current;
+        const item = comanda?.itens_comanda.find(i => i.id === itemId);
+        if (!comanda || !item) return;
+        const novaQuantidade = delta === 'remover' ? 0 : item.quantidade + delta;
+        try {
             const { error } = novaQuantidade <= 0
                 ? await db.from('itens_comanda').delete().eq('id', itemId)
                 : await db.from('itens_comanda').update({ quantidade: novaQuantidade }).eq('id', itemId);
             if (error) throw error;
-
-            const { data: comandaAtualizada } = await db.from('comandas').select('*, itens_comanda(*, produtos(nome))').eq('id', comandaAberta?.id).single();
-            if (comandaAtualizada) setComandaAberta(comandaAtualizada as unknown as Comanda);
-            carregarDados(true);
-
+            await recarregarComanda(comanda.id);
         } catch (err) {
             console.error(err);
             mostrarMensagem('Erro ao alterar quantidade.', 'erro');
         }
-    };
+    });
 
     const formatarMoeda = (valor: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
 
@@ -281,100 +311,130 @@ export default function GestaoComandas({ atendente }: GestaoComandasProps) {
             )}
 
             {comandaAberta && !modalCheckout && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-2 sm:p-4" style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top))', paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>
-                    <div className="bg-white rounded-xl shadow-2xl p-3 md:p-6 w-full max-w-4xl h-full max-h-[900px] flex flex-col">
-                        <div className="flex justify-between items-center mb-2 border-b pb-2">
-                            <div>
-                                <h3 className="text-2xl font-black text-cafe-primary">{comandaAberta.identificacao}</h3>
-                                <span className="text-sm text-gray-500 font-semibold">Cliente: {comandaAberta.nome_cliente}</span>
+                // Celular: tela cheia, uma lista por vez (abas). Tablet/computador: janela com as duas colunas lado a lado.
+                <div className="fixed inset-0 z-50 bg-white md:bg-black/70 md:flex md:items-center md:justify-center md:p-4" role="dialog" aria-modal="true" aria-label={`Comanda ${comandaAberta.identificacao}`}>
+                    <div className="bg-white w-full h-full md:h-[90dvh] md:max-w-5xl md:rounded-xl md:shadow-2xl flex flex-col overflow-hidden"
+                        style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+                        <header className="flex items-center gap-2 px-3 md:px-5 py-2 border-b shrink-0">
+                            <button onClick={() => setComandaAberta(null)} className="text-cafe-primary font-bold px-2 py-2 -ml-1 rounded-lg hover:bg-cafe-secondary/20 shrink-0" aria-label="Voltar às mesas">← Mesas</button>
+                            <div className="min-w-0 flex-1">
+                                <h3 className="text-xl font-black text-cafe-primary leading-tight truncate">{comandaAberta.identificacao}</h3>
+                                <p className="text-xs text-gray-500 font-semibold truncate">{comandaAberta.nome_cliente} · <span className="text-green-700">aberta</span></p>
                             </div>
-                            <div className="flex items-center gap-1">
-                                <button onClick={confirmarExclusao} className="text-red-500 text-sm font-semibold px-2 py-2 rounded-lg hover:bg-red-50">Excluir</button>
-                                <button onClick={() => setComandaAberta(null)} className="text-cafe-primary font-bold px-3 py-2 rounded-lg hover:bg-cafe-secondary/20">← Mesas</button>
-                            </div>
-                        </div>
-                        <p className="text-xs text-gray-500 mb-2">Os itens são salvos na hora. A comanda fica <strong>aberta</strong> até você fechar a conta.</p>
+                            <button onClick={confirmarExclusao} className="text-red-500 text-sm font-semibold px-2 py-2 rounded-lg hover:bg-red-50 shrink-0">Excluir</button>
+                        </header>
 
-                        <div className="flex flex-col min-h-0 flex-1 border-b pb-2 mb-2">
-                            <input
-                                type="text"
-                                placeholder="🔍 Buscar produto..."
-                                value={buscaProduto}
-                                onChange={(e) => setBuscaProduto(e.target.value)}
-                                className="w-full p-3 border rounded-lg mb-2 outline-none focus:ring-2 focus:ring-cafe-primary text-base flex-shrink-0 bg-gray-50"
-                            />
-                            <div className="space-y-2 overflow-y-auto flex-1 pr-1">
-                                {produtosFiltrados.map(produto => {
-                                    const semEstoque = !produto.is_receita && produto.quantidade_estoque <= 0;
-                                    const estoqueBaixo = !produto.is_receita && produto.quantidade_estoque > 0 && produto.quantidade_estoque <= 5;
-                                    return (
-                                        <div key={produto.id} className="bg-white border rounded-lg p-2 md:p-3 flex items-center justify-between hover:shadow-sm transition">
-                                            <div className="flex-1 min-w-0 pr-2">
-                                                <h4 className="font-semibold truncate text-sm md:text-base">{produto.nome}</h4>
-                                                <div className="flex flex-wrap items-center gap-2 mt-1">
-                                                    <span className="font-bold text-cafe-primary text-sm">{formatarMoeda(produto.preco_venda)}</span>
-                                                    {!produto.is_receita && (
-                                                        <>
-                                                            {semEstoque && <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold">🔴 Sem estoque</span>}
-                                                            {estoqueBaixo && <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-bold">🟡 {produto.quantidade_estoque} un</span>}
-                                                            {!semEstoque && !estoqueBaixo && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">🟢 {produto.quantidade_estoque} un</span>}
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <button onClick={() => adicionarItem(produto)} disabled={semEstoque} className={`flex-shrink-0 w-10 h-10 md:w-12 md:h-12 rounded-full font-bold text-xl flex items-center justify-center transition shadow-sm ${semEstoque ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-cafe-primary text-white hover:bg-cafe-dark active:scale-95'}`}>+</button>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-
-                        <div className="flex flex-col min-h-0 flex-1 bg-gray-50 border rounded p-2">
-                            <h4 className="text-sm font-bold text-gray-500 mb-2 uppercase tracking-wide">Itens Lançados</h4>
-                            <div className="flex-1 overflow-y-auto">
-                                {comandaAberta.itens_comanda.length === 0 ? (
-                                    <p className="text-center text-gray-400 italic mt-6">Nenhum item lançado ainda.</p>
-                                ) : (
-                                    <ul className="space-y-3 pr-1">
-                                        {comandaAberta.itens_comanda.map(item => (
-                                            <li key={item.id} className="bg-white border rounded-lg p-3 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                                                <div className="flex-1">
-                                                    <div className="font-semibold text-sm md:text-base">{item.produtos?.nome}</div>
-                                                    <div className="text-xs text-gray-500">{formatarMoeda(item.preco_unitario)} cada</div>
-                                                </div>
-
-                                                <div className="flex items-center gap-1 sm:gap-2 bg-gray-50 border rounded-lg p-1 w-full sm:w-auto justify-between sm:justify-start">
-                                                    <button onClick={() => alterarQuantidadeItem(item.id, item.quantidade, -1)} className="w-10 h-10 sm:w-8 sm:h-8 rounded bg-white shadow-sm border hover:bg-gray-100 font-bold active:bg-gray-200">-</button>
-                                                    <span className="font-bold w-6 text-center">{item.quantidade}</span>
-                                                    <button onClick={() => alterarQuantidadeItem(item.id, item.quantidade, 1)} className="w-10 h-10 sm:w-8 sm:h-8 rounded bg-cafe-primary text-white shadow-sm hover:opacity-90 font-bold active:bg-cafe-dark">+</button>
-
-                                                    <div className="w-px h-6 bg-gray-300 mx-1 hidden sm:block"></div>
-
-                                                    <div className="w-20 sm:w-24 text-right font-black text-sm md:text-base">{formatarMoeda(item.quantidade * item.preco_unitario)}</div>
-
-                                                    <button onClick={() => removerItem(item.id)} className="w-10 h-10 sm:w-8 sm:h-8 flex items-center justify-center text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition">🗑️</button>
-                                                </div>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="pt-3 mt-1 border-t space-y-2 shrink-0">
-                            <div className="flex items-center justify-between gap-3">
-                                <div>
-                                    <span className="block text-xs text-gray-500 font-semibold">Total parcial</span>
-                                    <span className="text-2xl md:text-3xl font-black text-cafe-primary">{formatarMoeda(subtotalComandaAberta)}</span>
-                                </div>
-                                <button onClick={abrirCheckout} className="bg-white text-blue-700 border-2 border-blue-600 text-base font-bold px-5 py-3 rounded-lg hover:bg-blue-50 active:scale-95 transition">
-                                    Fechar conta
-                                </button>
-                            </div>
-                            <button onClick={() => { setComandaAberta(null); mostrarMensagem(`Comanda ${comandaAberta.identificacao} salva e aberta.`, 'sucesso'); }} className="w-full bg-cafe-primary text-white text-lg font-bold px-6 py-3.5 rounded-lg shadow hover:bg-cafe-dark active:scale-95 transition">
-                                ✓ Salvar e voltar às mesas
+                        <div className="md:hidden grid grid-cols-2 gap-1 p-1 mx-3 mt-2 bg-gray-100 rounded-xl shrink-0" role="tablist" aria-label="Seções da comanda">
+                            <button role="tab" aria-selected={abaComanda === 'adicionar'} onClick={() => setAbaComanda('adicionar')}
+                                className={`py-2.5 rounded-lg text-sm font-bold transition ${abaComanda === 'adicionar' ? 'bg-white shadow text-cafe-primary' : 'text-gray-500'}`}>
+                                + Adicionar
+                            </button>
+                            <button role="tab" aria-selected={abaComanda === 'itens'} onClick={() => setAbaComanda('itens')}
+                                className={`py-2.5 rounded-lg text-sm font-bold transition flex items-center justify-center gap-1.5 ${abaComanda === 'itens' ? 'bg-white shadow text-cafe-primary' : 'text-gray-500'}`}>
+                                Comanda
+                                <span className={`min-w-[1.5rem] px-1.5 py-0.5 rounded-full text-xs ${totalItensAberta > 0 ? 'bg-cafe-primary text-white' : 'bg-gray-300 text-gray-600'}`}>{totalItensAberta}</span>
                             </button>
                         </div>
+
+                        <div className="flex-1 min-h-0 md:grid md:grid-cols-[3fr_2fr] md:divide-x">
+                            {/* Adicionar produtos */}
+                            <section className={`${abaComanda === 'adicionar' ? 'flex' : 'hidden'} md:flex flex-col h-full min-h-0`} aria-label="Adicionar produtos">
+                                <div className="px-3 md:px-4 pt-2 pb-2 space-y-2 shrink-0 border-b md:border-b-0">
+                                    <div className="relative">
+                                        <input type="search" placeholder="🔍 Buscar produto..." aria-label="Buscar produto" value={buscaProduto}
+                                            onChange={(e) => setBuscaProduto(e.target.value)}
+                                            className="w-full p-3 pr-10 border rounded-xl outline-none focus:ring-2 focus:ring-cafe-primary text-base bg-gray-50" />
+                                        {buscaProduto && (
+                                            <button onClick={() => setBuscaProduto('')} aria-label="Limpar busca" className="absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full text-gray-500 hover:bg-gray-200">✕</button>
+                                        )}
+                                    </div>
+                                    {categorias.length > 0 && buscaProduto.trim() === '' && (
+                                        <div className="flex gap-2 overflow-x-auto -mx-3 px-3 md:mx-0 md:px-0 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist" aria-label="Categorias">
+                                            {categorias.map(c => (
+                                                <button key={c} role="tab" aria-selected={categoria === c} onClick={() => setCategoria(c)}
+                                                    className={`shrink-0 px-3.5 py-1.5 rounded-full text-sm font-bold border transition ${categoria === c ? 'bg-cafe-primary text-white border-cafe-primary' : 'bg-white text-gray-700 border-gray-300'}`}>
+                                                    {c}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 md:px-4 py-2">
+                                    {produtosFiltrados.length === 0 ? (
+                                        <p className="text-center text-gray-400 italic mt-8">Nenhum produto encontrado.</p>
+                                    ) : (
+                                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+                                            {produtosFiltrados.map(produto => {
+                                                const semEstoque = !produto.is_receita && produto.quantidade_estoque <= 0;
+                                                const estoqueBaixo = !produto.is_receita && produto.quantidade_estoque > 0 && produto.quantidade_estoque <= 5;
+                                                const naComanda = qtdNaComanda.get(produto.id) || 0;
+                                                return (
+                                                    <button key={produto.id} onClick={() => adicionarItem(produto)} disabled={semEstoque} aria-label={`Adicionar ${produto.nome}`}
+                                                        className={`relative text-left rounded-xl border-2 p-2.5 min-h-[76px] flex flex-col justify-between transition active:scale-[0.97] ${semEstoque ? 'bg-gray-50 border-gray-200 opacity-60 cursor-not-allowed' : naComanda > 0 ? 'bg-cafe-secondary/10 border-cafe-primary' : 'bg-white border-gray-200 hover:border-cafe-primary'}`}>
+                                                        <span className="font-semibold text-sm leading-snug line-clamp-2 pr-6">{produto.nome}</span>
+                                                        <span className="flex items-center justify-between gap-1 mt-1">
+                                                            <span className="font-bold text-cafe-primary text-sm">{formatarMoeda(produto.preco_venda)}</span>
+                                                            {semEstoque && <span className="text-[11px] text-red-600 font-bold">Sem estoque</span>}
+                                                            {estoqueBaixo && <span className="text-[11px] text-yellow-700 font-bold">{produto.quantidade_estoque} un</span>}
+                                                        </span>
+                                                        {naComanda > 0 && (
+                                                            <span className="absolute top-1.5 right-1.5 min-w-[1.5rem] h-6 px-1.5 rounded-full bg-cafe-primary text-white text-xs font-black flex items-center justify-center" aria-hidden>{naComanda}</span>
+                                                        )}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            </section>
+
+                            {/* Itens lançados */}
+                            <section className={`${abaComanda === 'itens' ? 'flex' : 'hidden'} md:flex flex-col h-full min-h-0 bg-gray-50`} aria-label="Itens lançados">
+                                <h4 className="hidden md:block text-sm font-bold text-gray-500 uppercase tracking-wide px-4 pt-3 pb-1 shrink-0">Itens lançados</h4>
+                                <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 md:px-4 py-2">
+                                    {comandaAberta.itens_comanda.length === 0 ? (
+                                        <div className="text-center mt-10">
+                                            <p className="text-gray-400 italic">Nenhum item lançado ainda.</p>
+                                            <button onClick={() => setAbaComanda('adicionar')} className="md:hidden mt-3 text-cafe-primary font-bold underline">Adicionar produtos</button>
+                                        </div>
+                                    ) : (
+                                        <ul className="divide-y bg-white border rounded-xl">
+                                            {comandaAberta.itens_comanda.map(item => (
+                                                <li key={item.id} className="flex items-center gap-2 p-2.5">
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="font-semibold text-sm leading-snug truncate">{item.produtos?.nome}</div>
+                                                        <div className="text-xs text-gray-500">{formatarMoeda(item.preco_unitario)} · <strong className="text-cafe-dark">{formatarMoeda(item.quantidade * item.preco_unitario)}</strong></div>
+                                                    </div>
+                                                    <div className="flex items-center gap-1 shrink-0">
+                                                        <button onClick={() => alterarQuantidadeItem(item.id, -1)} aria-label={item.quantidade === 1 ? `Remover ${item.produtos?.nome}` : `Diminuir ${item.produtos?.nome}`}
+                                                            className={`w-10 h-10 rounded-lg border font-bold active:scale-95 ${item.quantidade === 1 ? 'text-red-600 border-red-200 bg-red-50' : 'bg-white'}`}>
+                                                            {item.quantidade === 1 ? '🗑' : '−'}
+                                                        </button>
+                                                        <span className="w-7 text-center font-black">{item.quantidade}</span>
+                                                        <button onClick={() => alterarQuantidadeItem(item.id, 1)} aria-label={`Aumentar ${item.produtos?.nome}`}
+                                                            className="w-10 h-10 rounded-lg bg-cafe-primary text-white font-bold active:scale-95">+</button>
+                                                    </div>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </div>
+                            </section>
+                        </div>
+
+                        <footer className="border-t bg-white px-3 md:px-5 pt-2.5 shrink-0 flex items-center gap-2" style={{ paddingBottom: 'max(0.625rem, env(safe-area-inset-bottom))' }}>
+                            <div className="min-w-0 mr-auto">
+                                <span className="block text-[11px] text-gray-500 font-semibold leading-none">Total parcial</span>
+                                <span className="text-xl md:text-2xl font-black text-cafe-primary whitespace-nowrap">{formatarMoeda(subtotalComandaAberta)}</span>
+                            </div>
+                            <button onClick={abrirCheckout} className="bg-white text-blue-700 border-2 border-blue-600 text-sm md:text-base font-bold px-3 md:px-5 py-3 rounded-xl hover:bg-blue-50 active:scale-95 transition whitespace-nowrap">
+                                Fechar conta
+                            </button>
+                            <button onClick={() => { setComandaAberta(null); mostrarMensagem(`Comanda ${comandaAberta.identificacao} salva e aberta.`, 'sucesso'); }} aria-label="Salvar e voltar às mesas"
+                                className="bg-cafe-primary text-white text-sm md:text-base font-bold px-4 md:px-6 py-3 rounded-xl shadow hover:bg-cafe-dark active:scale-95 transition whitespace-nowrap">
+                                ✓ Salvar
+                            </button>
+                        </footer>
                     </div>
                 </div>
             )}
@@ -476,7 +536,7 @@ export default function GestaoComandas({ atendente }: GestaoComandasProps) {
                     const totalItens = comanda.itens_comanda.reduce((acc, i) => acc + i.quantidade, 0);
                     const totalValor = comanda.itens_comanda.reduce((acc, i) => acc + (i.quantidade * i.preco_unitario), 0);
                     return (
-                        <div key={comanda.id} onClick={() => setComandaAberta(comanda)} className="bg-white border-2 border-cafe-secondary/30 hover:border-cafe-primary rounded-xl p-4 shadow-sm cursor-pointer hover:shadow-md transition group relative overflow-hidden flex flex-col justify-between min-h-[140px]">
+                        <div key={comanda.id} onClick={() => abrirComanda(comanda)} className="bg-white border-2 border-cafe-secondary/30 hover:border-cafe-primary rounded-xl p-4 shadow-sm cursor-pointer hover:shadow-md transition group relative overflow-hidden flex flex-col justify-between min-h-[140px]">
                             <div className="absolute top-0 left-0 w-full h-1 bg-yellow-400"></div>
                             <div>
                                 <h3 className="text-xl font-black text-cafe-dark group-hover:text-cafe-primary transition">{comanda.identificacao}</h3>

@@ -68,4 +68,38 @@ describe('Comandas ficam abertas até o pagamento', () => {
     expect(db.rpc).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: /Salvar e voltar às mesas/ })).toBeInTheDocument();
   });
+
+  it('celular: abre na lista da comanda e alterna para adicionar produtos', async () => {
+    const user = userEvent.setup();
+    render(<GestaoComandas atendente="Operador" />);
+    await user.click(await screen.findByText('Mesa 4'));
+    const abaItens = screen.getByRole('tab', { name: /Comanda/ });
+    expect(abaItens).toHaveAttribute('aria-selected', 'true');
+    expect(abaItens).toHaveTextContent('3');
+    await user.click(screen.getByRole('tab', { name: /Adicionar/ }));
+    expect(screen.getByRole('tab', { name: /Adicionar/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('region', { name: 'Adicionar produtos' })).not.toHaveClass('hidden');
+    expect(screen.getByRole('region', { name: 'Itens lançados' })).toHaveClass('hidden');
+  });
+
+  it('toques rápidos no "+" somam a partir da quantidade mais recente', async () => {
+    let qtd = 2;
+    const updates: number[] = [];
+    (db.from as ReturnType<typeof vi.fn>).mockImplementation((tabela: string) => {
+      const q = consulta({
+        data: tabela === 'controle_caixa' ? { id: 'cx1' } : tabela === 'comandas'
+          ? [{ ...comanda, itens_comanda: [{ ...comanda.itens_comanda[0], quantidade: qtd }, comanda.itens_comanda[1]] }] : [],
+        error: null,
+      });
+      if (tabela === 'comandas') q.single = vi.fn(() => consulta({ data: { ...comanda, itens_comanda: [{ ...comanda.itens_comanda[0], quantidade: qtd }, comanda.itens_comanda[1]] }, error: null }));
+      if (tabela === 'itens_comanda') q.update = vi.fn((v: { quantidade: number }) => { updates.push(v.quantidade); qtd = v.quantidade; return q; });
+      return q;
+    });
+    const user = userEvent.setup();
+    render(<GestaoComandas atendente="Operador" />);
+    await user.click(await screen.findByText('Mesa 4'));
+    const mais = screen.getByRole('button', { name: 'Aumentar Expresso' });
+    await user.click(mais); await user.click(mais); await user.click(mais);
+    await waitFor(() => expect(updates).toEqual([3, 4, 5]));
+  });
 });
